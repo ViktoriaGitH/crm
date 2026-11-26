@@ -304,3 +304,4 @@ revoke all on public.profiles, public.imports, public.leads, public.lead_events 
 create table if not exists public.crm_secrets (key text primary key, value text not null, updated_at timestamptz not null default now());
 alter table public.crm_secrets enable row level security;
 revoke all on public.crm_secrets from anon, authenticated;
+grant select, insert, update on public.crm_secrets to service_role;

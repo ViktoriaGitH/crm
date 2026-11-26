@@ -305,3 +305,20 @@ create table if not exists public.crm_secrets (key text primary key, value text 
 alter table public.crm_secrets enable row level security;
 revoke all on public.crm_secrets from anon, authenticated;
 grant select, insert, update on public.crm_secrets to service_role;
+
+-- без повторени лийдове: същият телефон (последните 9 цифри) или имейл не влиза втори път
+create or replace function public.phone_key(p text) returns text language sql immutable as $$
+  select case when length(regexp_replace(coalesce(p,''),'\D','','g')) >= 8 then right(regexp_replace(p,'\D','','g'), 9) end $$;
+create index if not exists leads_phone_key_idx on public.leads (public.phone_key(phone));
+create index if not exists leads_email_lower_idx on public.leads (lower(email));
+create or replace function public.leads_skip_dupes() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform pg_advisory_xact_lock(hashtext('leads_dedupe'));
+  if (public.phone_key(new.phone) is not null and exists (select 1 from leads where public.phone_key(phone) = public.phone_key(new.phone)))
+     or (coalesce(trim(new.email),'') <> '' and exists (select 1 from leads where lower(email) = lower(trim(new.email)))) then
+    return null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists leads_skip_dupes on public.leads;
+create trigger leads_skip_dupes before insert on public.leads for each row execute function public.leads_skip_dupes();

@@ -27,7 +27,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
   const [busyId, setBusyId] = useState(null);
   const [layout, setLayout] = useState(() => { try { return localStorage.getItem('crm-layout') || 'board'; } catch { return 'board'; } });
   useEffect(() => { try { localStorage.setItem('crm-layout', layout); } catch { /* ignore */ } }, [layout]);
-  const board = (view === 'leads' || view === 'calls') && layout === 'board';
+  const board = view === 'leads' || view === 'calls';
   const [newLead, setNewLead] = useState(false);
   const reqRef = useRef(0);
 
@@ -103,7 +103,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
     return <LeadPanel key={openId} id={openId} me={me} profiles={profiles} imports={impById} onClose={close} onChanged={changed} page />;
   }
 
-  const claimBtn = (r, cls = '') => !r.setter_id && me.role !== 'closer'
+  const claimBtn = (r, cls = '') => !r.setter_id && r.status !== 'booked' && me.role !== 'closer'
     ? <button className={`btn primary sm ${cls}`} disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам · звъня</button> : null;
 
   return (
@@ -112,10 +112,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
         <div><h1>{title}</h1><p>{sub}</p></div>
         <div className="row">
         {isAdmin && (view === 'leads' || view === 'calls') && <div className="tabs" role="tablist" aria-label="Роля"><button role="tab" aria-selected={view === 'leads'} className={view === 'leads' ? 'on' : ''} onClick={() => go('leads')}>Сетър</button><button role="tab" aria-selected={view === 'calls'} className={view === 'calls' ? 'on' : ''} onClick={() => go('calls')}>Клоузър</button></div>}
-        {isAdmin && view === 'leads' && <button className="btn primary" onClick={() => setNewLead(true)}>+ Нов лийд</button>}
-        {isAdmin && rows && rows.length > 0 && <button className="btn" onClick={() => exportCsv(shown, byId, impById)}><Icon name="download" size={16} />Експорт</button>}
-        {(view === 'leads' || view === 'calls') && <div className="tabs" role="tablist" aria-label="Изглед">{[['board', 'По статус'], ['table', 'Таблица']].map(([k, l]) => <button key={k} role="tab" aria-selected={layout === k} className={layout === k ? 'on' : ''} onClick={() => setLayout(k)}>{l}</button>)}</div>}
-        {tabs && <div className="tabs" role="tablist">{tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>}
+        {tabs && <select className="input" style={{ width: 'auto' }} value={tab} onChange={e => setTab(e.target.value)} aria-label="Кои лийдове">{tabs.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
         </div>
       </div>
 
@@ -143,11 +140,11 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
             const list = (rows || []).filter(view === 'calls' ? r => closerStage(r) === st : r => r.status === st);
             return (
               <div key={st} className={`col st-${st}`}>
-                <div className="col-head"><span className="dot" /><b>{view === 'calls' ? STAGE[st] : STATUS[st]}</b><span className="cnt">{rows ? list.length : '…'}</span></div>
+                <div className="col-head"><span className="dot" /><b>{view === 'calls' ? STAGE[st] : st === 'booked' ? 'Записан' : STATUS[st]}</b><span className="cnt">{rows ? list.length : '…'}</span></div>
                 <div className="col-body">
                   {rows === null ? <div className="loading-row" /> : list.length === 0 ? <div className="col-empty">—</div> : list.map(r => {
                     const person = byId[r.setter_id];
-                    const wait = !r.setter_id && st === 'new' ? waited(r.lead_created_at || r.created_at) : null;
+                    const wait = !r.setter_id && r.status === 'new' ? waited(r.lead_created_at || r.created_at) : null;
                     const when = st === 'follow_up' ? r.follow_up_at : (st === 'booked' || st === 'upcoming' || st === 'await') ? r.call_at : null;
                     const src = r.source || impById[r.import_id]?.name;
                     return (
@@ -223,7 +220,6 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
         {hasMore && <button className="btn" disabled={loadingMore} onClick={loadMore}>{loadingMore ? 'Зареждам…' : 'Покажи още'}</button>}
       </div>
       </>}
-      {newLead && <NewLead onClose={() => setNewLead(false)} onDone={id => { setNewLead(false); changed(); open(id); }} />}
     </>
   );
 }

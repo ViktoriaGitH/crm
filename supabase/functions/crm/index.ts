@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
       };
       const leads: any[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await sb.from('leads').select('id, phone, email, status, call_at, booking_uid').range(from, from + 999);
+        const { data, error } = await sb.from('leads').select('id, phone, email, status, call_at, booking_uid, setter_id').range(from, from + 999);
         if (error) throw error; leads.push(...(data || [])); if (!data || data.length < 1000) break;
       }
       const byPhone = new Map<string, any>(), byEmail = new Map<string, any>(), byUid = new Map<string, any>();
@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
       let marked = 0, updated = 0, same = 0;
       for (const { l, bk } of best.values()) {
         if (l.status === 'booked' && l.booking_uid === bk.uid && l.call_at && +new Date(l.call_at) === +new Date(bk.start)) { same++; continue; }
-        const { error } = await sb.from('leads').update({ status: 'booked', call_at: bk.start, booking_uid: bk.uid, closer_id: closerFor(bk), follow_up_at: null }).eq('id', l.id);
+        const { error } = await sb.from('leads').update({ status: 'booked', call_at: bk.start, booking_uid: bk.uid, closer_id: closerFor(bk), follow_up_at: null, ...(l.setter_id ? {} : { setter_id: me.id, claimed_at: new Date().toISOString() }) }).eq('id', l.id);
         if (error) throw error;
         await sb.from('lead_events').insert({ lead_id: l.id, user_id: me.id, type: 'booked', data: { call_at: bk.start, source: 'cal_sync' } });
         if (l.status === 'booked') updated++; else marked++;

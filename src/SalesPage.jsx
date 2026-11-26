@@ -2,38 +2,26 @@ import { useEffect, useMemo, useState } from 'react';
 import { db } from './backend.js';
 import { Modal, money, useToast } from './ui.jsx';
 
-export default function SalesPage() {
+export default function SalesPage({ st, reload }) {
   const toast = useToast();
-  const [st, setSt] = useState(null);
   const [pk, setPk] = useState([]);
-  const [people, setPeople] = useState([]);
-  const [imports, setImports] = useState([]);
   const [edit, setEdit] = useState(null);
   const [costPct, setCostPct] = useState(() => { try { return localStorage.getItem('crm-cost-pct') || ''; } catch { return ''; } });
   const [costFix, setCostFix] = useState(() => { try { return localStorage.getItem('crm-cost-fix') || ''; } catch { return ''; } });
   useEffect(() => { try { localStorage.setItem('crm-cost-pct', costPct); localStorage.setItem('crm-cost-fix', costFix); } catch { /* ignore */ } }, [costPct, costFix]);
 
   const load = () => {
-    db.stats().then(setSt).catch(e => toast(e.message, true));
     db.packages().then(setPk).catch(() => {});
-    db.profiles().then(setPeople).catch(() => {});
-    db.imports().then(setImports).catch(() => {});
   };
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const s = st?.sales || {};
   const pkName = useMemo(() => Object.fromEntries(pk.map(p => [p.id, p.name])), [pk]);
-  const pName = useMemo(() => Object.fromEntries(people.map(p => [p.id, p.full_name])), [people]);
-  const iName = useMemo(() => Object.fromEntries(imports.map(p => [p.id, p.name])), [imports]);
   const costs = (+s.net || 0) * (+costPct || 0) / 100 + (+costFix || 0);
   const profit = (+s.net || 0) - costs;
-  const held = (s.closed || 0) + (s.not_closed || 0);
-  const pct = (a, b) => (b ? Math.round((a / b) * 100) + '%' : '—');
 
   return (
     <>
-      <div className="page-head"><div><h1>Продажби</h1><p>Оборот, отстъпки и печалба от затворените срещи.</p></div>
-        <button className="btn primary" onClick={() => setEdit({})}>+ Пакет</button></div>
 
       <div className="stats" style={{ marginBottom: 16 }}>
         <div className="stat"><b>{money(s.gross)}</b><span>оборот (по цена)</span></div>
@@ -44,11 +32,7 @@ export default function SalesPage() {
       <div className="stats" style={{ marginBottom: 16 }}>
         <div className="stat"><b>{s.closed || 0}</b><span>продажби</span></div>
         <div className="stat"><b>{s.closed ? money(s.net / s.closed) : '—'}</b><span>среден чек</span></div>
-        <div className="stat"><b>{pct(s.closed || 0, held)}</b><span>затваряне (от проведени)</span></div>
-        <div className="stat"><b>{pct(held, held + (s.no_show || 0))}</b><span>явяване на среща</span></div>
-        <div className="stat"><b>{s.pending || 0}</b><span>срещи без резултат</span></div>
       </div>
-
       <div className="card box" style={{ marginBottom: 16 }}>
         <p className="sec-t">Разходи (за сметката на печалбата)</p>
         <div className="map-grid">
@@ -58,32 +42,16 @@ export default function SalesPage() {
         <span className="faint" style={{ fontSize: 13 }}>Разходи: {money(costs)} · Печалба = платено − разходи. Тези две полета се помнят на това устройство.</span>
       </div>
 
-      <div className="dash-2">
-        <div className="card">
-          <div className="box"><p className="sec-t" style={{ margin: 0 }}>По пакет</p></div>
-          <div className="box"><table className="table compact"><thead><tr><th>Пакет</th><th>Бр.</th><th>Оборот</th><th>Отстъпки</th><th>Платено</th></tr></thead><tbody>
-            {(st?.by_package || []).length === 0 ? <tr><td colSpan={5} className="faint">Още няма затворени сделки.</td></tr> :
-              st.by_package.map(x => <tr key={x.id || 'none'}><td>{pkName[x.id] || 'Без пакет'}</td><td>{x.n}</td><td>{money(x.gross)}</td><td>−{money(x.discount)}</td><td><b>{money(x.net)}</b></td></tr>)}
-          </tbody></table></div>
-        </div>
-        <div className="card">
-          <div className="box"><p className="sec-t" style={{ margin: 0 }}>По клоузър</p></div>
-          <div className="box"><table className="table compact"><thead><tr><th>Клоузър</th><th>Срещи</th><th>Затв.</th><th>Не се яви</th><th>Платено</th></tr></thead><tbody>
-            {(st?.closers || []).length === 0 ? <tr><td colSpan={5} className="faint">Още няма срещи.</td></tr> :
-              st.closers.map(x => <tr key={x.id}><td>{pName[x.id] || '—'}</td><td>{x.booked}</td><td>{x.closed || 0} ({pct(x.closed || 0, x.booked)})</td><td>{x.no_show || 0}</td><td><b>{money(x.net)}</b></td></tr>)}
-          </tbody></table></div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="box"><p className="sec-t" style={{ margin: 0 }}>По източник (уебинар)</p></div>
-        <div className="box"><table className="table compact"><thead><tr><th>Източник</th><th>Лийдове</th><th>Записани</th><th>Затворени</th><th>Платено</th></tr></thead><tbody>
-          {(st?.imports || []).map(x => <tr key={x.id}><td>{iName[x.id] || '—'}</td><td>{x.total}</td><td>{x.booked}</td><td>{x.closed || 0}</td><td><b>{money(x.net)}</b></td></tr>)}
+      <div className="card">
+        <div className="box"><p className="sec-t" style={{ margin: 0 }}>По пакет</p></div>
+        <div className="box"><table className="table compact"><thead><tr><th>Пакет</th><th>Бр.</th><th>Оборот</th><th>Отстъпки</th><th>Платено</th></tr></thead><tbody>
+          {(st?.by_package || []).length === 0 ? <tr><td colSpan={5} className="faint">Още няма затворени сделки.</td></tr> :
+            st.by_package.map(x => <tr key={x.id || 'none'}><td>{pkName[x.id] || 'Без пакет'}</td><td>{x.n}</td><td>{money(x.gross)}</td><td>−{money(x.discount)}</td><td><b>{money(x.net)}</b></td></tr>)}
         </tbody></table></div>
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <p className="sec-t">Пакети</p>
+        <div className="row"><p className="sec-t grow">Пакети</p><button className="btn sm" onClick={() => setEdit({})}>+ Пакет</button></div>
         <div className="card">
           {pk.length === 0 && <div className="box faint">Добави пакетите, които продавате, за да ги избира клоузърът при затваряне.</div>}
           {pk.map(p => (
@@ -95,7 +63,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {edit && <PackageForm pk={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
+      {edit && <PackageForm pk={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); reload(); }} />}
     </>
   );
 }

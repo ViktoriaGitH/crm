@@ -359,3 +359,11 @@ textarea.input { resize: vertical; line-height: 1.5; }
 .btn.primary:active:not(:disabled) { transform: translateY(1px); }
 .btn.primary:disabled { box-shadow: none; }
 .input:focus { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 18px rgba(198, 244, 50, .15); }
+
+/* лого VA Sales */
+.logo { display: inline-flex; align-items: baseline; gap: 7px; line-height: 1; white-space: nowrap; }
+.logo-va { font-weight: 800; font-size: 21px; letter-spacing: .5px; color: var(--text); }
+.logo-sales { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-weight: 400; font-size: 29px; letter-spacing: .2px; color: var(--text);
+  text-decoration: underline; text-decoration-color: #C6F432; text-decoration-thickness: 3px; text-underline-offset: 5px; text-decoration-skip-ink: none;
+  text-shadow: 0 0 22px rgba(198, 244, 50, .25); padding-right: 2px; }
+[data-theme="light"] .logo-sales { text-shadow: none; }

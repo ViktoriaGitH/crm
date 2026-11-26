@@ -37,7 +37,7 @@ export default function App() {
   const load = useCallback(async () => { try { setMe(await db.me()); } catch { setMe(null); } }, []);
   useEffect(() => { load(); return db.onAuth(() => load()); }, [load]);
 
-  if (me === undefined) return <div className="login"><div className="brand"><span className="brand-mark">VA</span>CRM</div></div>;
+  if (me === undefined) return <div className="login"><div className="brand"><Brand /></div></div>;
   if (!me) return <Login theme={theme} toggleTheme={toggleTheme} />;
   if (!me.role) return <NoAccess />;
   return <Shell me={me} theme={theme} toggleTheme={toggleTheme} />;
@@ -63,7 +63,7 @@ function Login({ theme, toggleTheme }) {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <div className="row"><div className="brand grow"><span className="brand-mark">VA</span>CRM</div>
+        <div className="row"><div className="brand grow"><Brand /></div>
           <button type="button" className="icon-btn" onClick={toggleTheme} aria-label="Смени темата"><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button></div>
         <h1>{setup ? 'Създай админ акаунта' : 'Вход'}</h1>
         {setup && <p className="muted" style={{ margin: '-6px 0 0', fontSize: 14 }}>Първоначална настройка. Това ще е твоят акаунт с пълен достъп. После от „Екип“ създаваш сетъри и клоузъри.</p>}
@@ -89,7 +89,7 @@ function Login({ theme, toggleTheme }) {
 function NoAccess() {
   return (
     <div className="login"><div className="login-card">
-      <div className="brand"><span className="brand-mark">VA</span>CRM</div>
+      <div className="brand"><Brand /></div>
       <h1>Нямаш достъп</h1>
       <p className="muted" style={{ margin: 0 }}>Акаунтът ти е спрян или още не е настроен. Свържи се с администратора.</p>
       <button className="btn" onClick={() => db.signOut()}>Излез</button>
@@ -128,7 +128,7 @@ function Shell({ me, theme, toggleTheme }) {
   return (
     <div className="shell">
       <aside className="side" aria-label="Странично меню">
-        <div className="brand side-brand"><span className="brand-mark">VA</span><span>CRM</span></div>
+        <div className="brand side-brand"><Brand /></div>
         <nav className="side-nav" aria-label="Меню">{nav.map(link)}</nav>
         <div className="side-foot">
           <div className="me-card"><Av name={me.full_name} /><div className="grow"><b>{me.full_name}</b><span>{ROLE[me.role]}</span></div></div>
@@ -141,7 +141,7 @@ function Shell({ me, theme, toggleTheme }) {
       <div className="content">
         {DEMO && <div className="demo-banner">Демо режим — данните се пазят само в този браузър. <button onClick={() => db.resetDemo?.()}>Нулирай демото</button></div>}
         <header className="top">
-          <div className="brand"><span className="brand-mark">VA</span><span>CRM</span></div>
+          <div className="brand"><Brand /></div>
           <div className="top-right">
             <button className="icon-btn" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
             <button className="icon-btn" onClick={signOut} aria-label="Излез" title="Излез"><Icon name="out" /></button>
@@ -157,4 +157,8 @@ function Shell({ me, theme, toggleTheme }) {
       <nav className="bottom-nav" aria-label="Меню">{nav.map(link)}</nav>
     </div>
   );
+}
+
+function Brand() {
+  return <span className="logo" aria-label="VA Sales"><span className="logo-va">VA</span><span className="logo-sales">Sales</span></span>;
 }

@@ -149,7 +149,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
   const release = () => run(() => db.release(lead.id), 'Лийдът е освободен');
   // админът може да отбелязва директно; ако лийдът е свободен, първо става негов
   const ensureMine = async () => { if (!lead.setter_id && isAdmin) { const ok = await db.claim(lead.id); if (!ok) throw new Error('Някой друг току-що го взе'); } };
-  const setStatus = (s) => run(async () => { await ensureMine(); await db.update(lead.id, { status: s }); }, `Записано: ${STATUS[s]}`);
+  const setStatus = (s) => run(async () => { await ensureMine(); await db.update(lead.id, { status: s }); }, s === 'new' ? 'Статусът е махнат' : `Записано: ${STATUS[s]}`);
   const saveNotes = () => run(async () => { await ensureMine(); await db.update(lead.id, { notes }); }, 'Бележката е запазена');
 
   function pick(s) {
@@ -158,7 +158,9 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
       setFuAt(toLocalInput(d)); setMode(mode === 'follow_up' ? null : 'follow_up'); return;
     }
     if (s === 'booked') { if (mode !== 'booked' && free && isAdmin) run(ensureMine); setMode(mode === 'booked' ? null : 'booked'); return; }
-    setMode(null); setStatus(s);
+    setMode(null);
+    if (lead.status === s) { setStatus('new'); return; }   // второ натискане маха статуса
+    setStatus(s);
   }
   function quick(kind) {
     const d = new Date();
@@ -271,7 +273,8 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
 
             {canEdit && lead.status !== 'booked' && (
               <section>
-                <p className="sec-t">Какво стана при разговора?</p>
+                <div className="row" style={{ alignItems: 'baseline' }}><p className="sec-t grow">Какво стана при разговора?</p>
+                  {lead.status !== 'new' && <button className="btn ghost sm" disabled={busy} onClick={() => { setMode(null); setStatus('new'); }}>Махни статуса</button>}</div>
                 <div className="status-grid">
                   {ACTIONS.map(([k, label]) => (
                     <button key={k} className={`status-btn st-${k} ${lead.status === k || mode === k ? 'on' : ''} ${k === 'booked' ? 'wide' : ''}`}

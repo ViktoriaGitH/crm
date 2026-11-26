@@ -27,7 +27,7 @@ export default function SalesPage({ st, reload }) {
         <div className="stat"><b>{money(s.gross)}</b><span>оборот (по цена)</span></div>
         <div className="stat"><b>−{money(s.discount)}</b><span>отстъпки</span></div>
         <div className="stat"><b>{money(s.net)}</b><span>реално платено</span></div>
-        <div className="stat"><b style={{ color: profit < 0 ? 'var(--accent)' : '#2E9E6A' }}>{money(profit)}</b><span>печалба</span></div>
+        <div className="stat"><b style={{ color: profit < 0 ? 'var(--accent)' : 'var(--s-book)' }}>{money(profit)}</b><span>печалба</span></div>
       </div>
       <div className="stats" style={{ marginBottom: 16 }}>
         <div className="stat"><b>{s.closed || 0}</b><span>продажби</span></div>

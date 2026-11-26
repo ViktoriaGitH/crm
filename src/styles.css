@@ -367,3 +367,9 @@ textarea.input { resize: vertical; line-height: 1.5; }
   text-decoration: underline; text-decoration-color: #C6F432; text-decoration-thickness: 3px; text-underline-offset: 5px; text-decoration-skip-ink: none;
   text-shadow: 0 0 22px rgba(198, 244, 50, .25); padding-right: 2px; }
 [data-theme="light"] .logo-sales { text-shadow: none; }
+
+/* подчертаване като с молив */
+.logo-sales { text-decoration: none; position: relative; }
+.logo-sales::after { content: ''; position: absolute; left: -4px; right: -6px; bottom: -9px; height: 12px; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 16' preserveAspectRatio='none'%3E%3Cfilter id='p' x='-5%25' y='-50%25' width='110%25' height='200%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='2.2'/%3E%3C/filter%3E%3Cg filter='url(%23p)' fill='none' stroke='%23C6F432' stroke-linecap='round'%3E%3Cpath d='M3 9.5 C 40 6.5, 85 8.2, 120 7.4 S 175 6.2, 197 7.8' stroke-width='3.2' opacity='.95'/%3E%3Cpath d='M10 11.6 C 55 9.4, 110 10.6, 150 9.6 S 185 9.2, 192 10.4' stroke-width='1.6' opacity='.55'/%3E%3C/g%3E%3C/svg%3E") center / 100% 100% no-repeat; filter: drop-shadow(0 0 6px rgba(198, 244, 50, .35)); }
+[data-theme="light"] .logo-sales::after { filter: none; }

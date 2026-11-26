@@ -60,15 +60,17 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
     if (!r) throw new Error('Някой друг току-що го взе');
   }, 'Лийдът е твой — звънни!');
   const release = () => run(() => db.release(lead.id), 'Лийдът е освободен');
-  const setStatus = (s) => run(() => db.update(lead.id, { status: s }), `Записано: ${STATUS[s]}`);
-  const saveNotes = () => run(() => db.update(lead.id, { notes }), 'Бележката е запазена');
+  // админът може да отбелязва директно; ако лийдът е свободен, първо става негов
+  const ensureMine = async () => { if (!lead.setter_id && isAdmin) { const ok = await db.claim(lead.id); if (!ok) throw new Error('Някой друг току-що го взе'); } };
+  const setStatus = (s) => run(async () => { await ensureMine(); await db.update(lead.id, { status: s }); }, `Записано: ${STATUS[s]}`);
+  const saveNotes = () => run(async () => { await ensureMine(); await db.update(lead.id, { notes }); }, 'Бележката е запазена');
 
   function pick(s) {
     if (s === 'follow_up') {
       const d = lead.follow_up_at ? new Date(lead.follow_up_at) : (() => { const x = new Date(); x.setDate(x.getDate() + 1); x.setHours(10, 0, 0, 0); return x; })();
       setFuAt(toLocalInput(d)); setMode(mode === 'follow_up' ? null : 'follow_up'); return;
     }
-    if (s === 'booked') { setMode(mode === 'booked' ? null : 'booked'); return; }
+    if (s === 'booked') { if (mode !== 'booked' && free && isAdmin) run(ensureMine); setMode(mode === 'booked' ? null : 'booked'); return; }
     setMode(null); setStatus(s);
   }
   function quick(kind) {
@@ -84,7 +86,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
     const d = new Date(fuAt);
     if (!fuAt || isNaN(d)) { toast('Избери дата и час', true); return; }
     if (d < new Date(Date.now() - 60000)) { toast('Избери час в бъдещето', true); return; }
-    run(async () => { await db.update(lead.id, { status: 'follow_up', follow_up_at: d.toISOString() }); setMode(null); }, `Фолоу ъп: ${fmt(d)}`);
+    run(async () => { await ensureMine(); await db.update(lead.id, { status: 'follow_up', follow_up_at: d.toISOString() }); setMode(null); }, `Фолоу ъп: ${fmt(d)}`);
   }
 
   useEffect(() => {
@@ -120,7 +122,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
 
         {lead && (
           <div className="panel-body">
-            {free && me.role === 'setter' && (
+            {free && (me.role === 'setter' || me.role === 'admin') && (
               <div className="claim-box">
                 <b>Този лийд е свободен</b>
                 <span className="muted" style={{ fontSize: 14 }}>Вземи го, за да видиш телефона и да отбележиш разговора.</span>

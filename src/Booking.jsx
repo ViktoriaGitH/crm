@@ -9,7 +9,7 @@ const hm = new Intl.DateTimeFormat('bg-BG', { hour: '2-digit', minute: '2-digit'
 
 export default function Booking({ lead, profiles, onBooked }) {
   const toast = useToast();
-  const closers = useMemo(() => profiles.filter(p => p.role === 'closer' && p.active && p.cal_link), [profiles]);
+  const closers = useMemo(() => profiles.filter(p => (p.role === 'closer' || p.role === 'admin') && p.active && p.cal_link), [profiles]);
   const [closerId, setCloserId] = useState(closers[0]?.id || '');
   const [mo, setMo] = useState(0);
   const [slots, setSlots] = useState(null);
@@ -59,7 +59,7 @@ export default function Booking({ lead, profiles, onBooked }) {
   }
 
   if (!closers.length) {
-    return <div className="err">Няма клоузър със свързан Cal.com линк. Админът трябва да го добави в „Екип“.</div>;
+    return <div className="err">Още няма свързан Cal.com календар. Добави Cal.com линк в „Екип“ на клоузъра или на своя админ акаунт, ако ти провеждаш разговорите.</div>;
   }
 
   return (

@@ -64,7 +64,7 @@ export default function HomePage({ me }) {
     <>
       <div className="page-head">
         <div><h1>{hello}, {me.full_name.split(' ')[0]}</h1><p>{isAdmin ? 'Обобщение на всички лийдове и екипа.' : 'Твоят ден с един поглед.'}</p></div>
-        {me.role === 'setter' && <button className="btn primary" disabled={grabbing || !d.free} onClick={grabNext}><Icon name="phone" size={16} />{grabbing ? 'Взимам…' : 'Вземи следващия лийд'}</button>}
+        {(me.role === 'setter' || me.role === 'admin') && <button className="btn primary" disabled={grabbing || !d.free} onClick={grabNext}><Icon name="phone" size={16} />{grabbing ? 'Взимам…' : 'Вземи следващия лийд'}</button>}
       </div>
 
       <div className="kpis">

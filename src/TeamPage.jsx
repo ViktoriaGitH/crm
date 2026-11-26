@@ -43,7 +43,7 @@ export default function TeamPage({ me }) {
                 <div className="faint" style={{ fontSize: 13 }}>
                   {p.email}
                   {p.role === 'setter' && ` · взети ${ps.taken || 0} · обработени ${ps.worked || 0} · записани ${ps.booked || 0}`}
-                  {p.role === 'closer' && (p.cal_link ? ' · Cal.com свързан' : ' · ⚠ няма Cal.com линк')}
+                  {p.role === 'closer' && (p.cal_link ? ' · Cal.com свързан' : ' · ⚠ няма Cal.com линк')}{p.role === 'admin' && p.cal_link && ' · провежда разговори (Cal.com свързан)'}
                 </div>
               </div>
               <button className="btn sm" onClick={() => setEdit(p)}>Редактирай</button>
@@ -93,8 +93,8 @@ function UserForm({ user, me, onClose, onSaved }) {
             <option value="admin">Админ — пълен достъп</option>
           </select>
         </label>
-        {f.role === 'closer' && (
-          <label className="field">Cal.com линк на клоузъра
+        {(f.role === 'closer' || f.role === 'admin') && (
+          <label className="field">{f.role === 'admin' ? 'Cal.com линк (ако и ти провеждаш разговори)' : 'Cal.com линк на клоузъра'}
             <input className="input" value={f.cal_link} onChange={set('cal_link')} placeholder="cal.com/ime/razgovor" />
             <span className="faint" style={{ fontWeight: 400 }}>Линкът към събитието, в което сетърите записват разговори.</span>
           </label>

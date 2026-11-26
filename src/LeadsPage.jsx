@@ -82,7 +82,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
 
   const [title, sub] = TITLES[view];
   const tabs = view !== 'leads' ? null : isAdmin
-    ? [['all', 'Всички'], ['free', 'Свободни'], ['taken', 'Взети']]
+    ? [['all', 'Всички'], ['free', 'Свободни'], ['mine', 'Моите'], ['taken', 'Взети']]
     : [['free', 'Свободни'], ['mine', 'Моите']];
   let shown = rows || [];
 
@@ -146,7 +146,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
                       <td>{person ? <span className="setter-chip"><Av name={person.full_name} />{person.full_name}</span> : <span className="free-chip">свободен</span>}</td>
                       {!whenCol && <td className="muted">{fmtDay(r.lead_created_at || r.created_at)}</td>}
                       <td style={{ textAlign: 'right' }}>
-                        {!r.setter_id && me.role === 'setter' && <button className="btn primary sm" disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам</button>}
+                        {!r.setter_id && me.role !== 'closer' && <button className="btn primary sm" disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам</button>}
                       </td>
                     </tr>
                   );
@@ -169,7 +169,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
                   {w && <span className={`when ${w.cls}`}>{view === 'calls' ? 'Разговор: ' : 'Звънни: '}{w.text}</span>}
                   <div className="meta">
                     <span>{maskPhone(r, me)}{impById[r.import_id] ? ' · ' + impById[r.import_id].name : ''}</span>
-                    {!r.setter_id && me.role === 'setter'
+                    {!r.setter_id && me.role !== 'closer'
                       ? <button className="btn primary sm" disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам</button>
                       : person ? <span className="setter-chip"><Av name={person.full_name} />{person.full_name.split(' ')[0]}</span> : <span className="free-chip">свободен</span>}
                   </div>

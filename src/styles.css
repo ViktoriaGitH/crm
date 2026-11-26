@@ -299,7 +299,7 @@ textarea.input { resize: vertical; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 /* табло по статус */
-.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(170px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(138px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
 .col { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column; min-height: 200px; max-height: calc(100vh - 230px); }
 .col-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
 .col-head b { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; flex: 1; }
@@ -373,3 +373,17 @@ textarea.input { resize: vertical; line-height: 1.5; }
 .logo-sales::after { content: ''; position: absolute; left: -4px; right: -6px; bottom: -9px; height: 12px; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 16' preserveAspectRatio='none'%3E%3Cfilter id='p' x='-5%25' y='-50%25' width='110%25' height='200%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='2.2'/%3E%3C/filter%3E%3Cg filter='url(%23p)' fill='none' stroke='%23C6F432' stroke-linecap='round'%3E%3Cpath d='M3 9.5 C 40 6.5, 85 8.2, 120 7.4 S 175 6.2, 197 7.8' stroke-width='3.2' opacity='.95'/%3E%3Cpath d='M10 11.6 C 55 9.4, 110 10.6, 150 9.6 S 185 9.2, 192 10.4' stroke-width='1.6' opacity='.55'/%3E%3C/g%3E%3C/svg%3E") center / 100% 100% no-repeat; filter: drop-shadow(0 0 6px rgba(198, 244, 50, .35)); }
 [data-theme="light"] .logo-sales::after { filter: none; }
+.k-tag { align-self: flex-start; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--border2); border-radius: 999px; padding: 1px 7px; }
+.board .col.st-closed .col-head b { color: var(--s-book); } .board .col.st-not_closed { --st: var(--danger); }
+
+/* компактно табло — 8 колони на един екран */
+.board { grid-auto-columns: minmax(118px, 1fr); gap: 8px; }
+.board .col-head { padding: 9px 8px; gap: 6px; } .board .col-head b { font-size: 10.5px; letter-spacing: .3px; }
+.board .col-head .cnt { min-width: 20px; padding: 0 5px; font-size: 11px; } .board .col-head .dot { width: 7px; height: 7px; flex: none; }
+.board .col-body { padding: 6px; }
+.board .kcard { padding: 9px; gap: 4px; border-radius: 10px; }
+.k-name { font-size: 13.5px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.k-meta { display: flex; align-items: center; gap: 6px; } .board .k-av { width: 24px; height: 24px; font-size: 10px; }
+.board .k-src { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board .when { font-size: 12.5px; line-height: 1.35; } .board .k-claim { min-height: 30px; font-size: 12.5px; padding: 0 8px; }
+.board .col-head b { white-space: normal; line-height: 1.2; }

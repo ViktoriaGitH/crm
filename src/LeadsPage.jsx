@@ -104,7 +104,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
   }
 
   const claimBtn = (r, cls = '') => !r.setter_id && r.status !== 'booked' && me.role !== 'closer'
-    ? <button className={`btn primary sm ${cls}`} disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам лийда</button> : null;
+    ? <button className={`btn primary sm ${cls}`} disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам</button> : null;
 
   return (
     <>
@@ -137,10 +137,10 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
       {board && (
         <div className="board">
           {(view === 'calls' ? CLOSER_COLS : BOARD).map(st => {
-            const list = (rows || []).filter(view === 'calls' ? r => closerStage(r) === st : r => r.status === st);
+            const list = (rows || []).filter(view === 'calls' ? r => closerStage(r) === st : r => setterCol(r) === st);
             return (
               <div key={st} className={`col st-${st}`}>
-                <div className="col-head"><span className="dot" /><b>{view === 'calls' ? STAGE[st] : st === 'booked' ? 'Записан' : STATUS[st]}</b><span className="cnt">{rows ? list.length : '…'}</span></div>
+                <div className="col-head"><span className="dot" /><b>{view === 'calls' ? STAGE[st] : COL_LABEL[st] || STATUS[st]}</b><span className="cnt">{rows ? list.length : '…'}</span></div>
                 <div className="col-body">
                   {rows === null ? <div className="loading-row" /> : list.length === 0 ? <div className="col-empty">—</div> : list.map(r => {
                     const person = byId[r.setter_id];
@@ -149,12 +149,14 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
                     const src = r.source || impById[r.import_id]?.name;
                     return (
                       <a key={r.id} className="kcard" href={`#/${view}/${r.id}`}>
-                        <div className="k-top"><b>{r.full_name}</b>
-                          {person ? <span className="k-av" title={person.full_name}>{initials2(person.full_name)}</span> : wait && <span className="k-wait">чака {wait}</span>}</div>
-                        <span className="k-contact">{maskPhone(r, me)}{r.email ? ' · ' + r.email : ''}</span>
+                        <b className="k-name">{r.full_name}</b>
+                        <span className="k-contact">{maskPhone(r, me)}</span>
+                        {(person || wait) && <div className="k-meta">{person ? <span className="k-av" title={person.full_name}>{initials2(person.full_name)}</span> : <span className="k-wait">чака {wait}</span>}</div>}
                         {when && <span className={`when ${relWhen(when).cls}`}>{st === 'follow_up' ? 'Обади се: ' : 'Среща: '}{relWhen(when).text}</span>}
+                        {r.outcome === 'no_show' && <span className="k-tag">не се яви</span>}
+                        {r.outcome === 'rescheduled' && <span className="k-tag">пренасрочена</span>}
                         {r.outcome === 'closed' && <span className="k-money">{money(r.sale_price - (r.discount || 0))}{+r.discount ? <s> {money(r.sale_price)}</s> : null}</span>}
-                        {src && <span className="k-src"><span>Източник</span><b>{src}</b></span>}
+                        {src && <span className="k-src" title={src}>{src}</span>}
                         {claimBtn(r, 'k-claim')}
                       </a>
                     );
@@ -255,7 +257,10 @@ function NewLead({ onClose, onDone }) {
   );
 }
 
-const BOARD = ['new', 'answered', 'no_answer', 'wrong_number', 'follow_up', 'booked'];
+const BOARD = ['new', 'answered', 'no_answer', 'wrong_number', 'follow_up', 'booked', 'closed', 'not_closed'];
+// записаните се разпределят според резултата от срещата
+const setterCol = r => r.status !== 'booked' ? r.status : r.outcome === 'closed' ? 'closed' : (r.outcome === 'not_closed' || r.outcome === 'no_show') ? 'not_closed' : 'booked';
+const COL_LABEL = { booked: 'Записан', closed: 'Затворена', not_closed: 'Не затворена' };
 const initials2 = n => String(n || '').split(/\s+/).map(w => (w.match(/\p{L}/u) || [''])[0]).join('').slice(0, 2).toUpperCase();
 function waited(t) {
   const h = (Date.now() - new Date(t)) / 36e5;

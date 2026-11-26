@@ -87,6 +87,17 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
     run(async () => { await db.update(lead.id, { status: 'follow_up', follow_up_at: d.toISOString() }); setMode(null); }, `Фолоу ъп: ${fmt(d)}`);
   }
 
+  useEffect(() => {
+    if (!canEdit || !lead || lead.status === 'booked') return;
+    const h = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+      const i = Number(e.key) - 1;
+      if (i >= 0 && i < ACTIONS.length && !busy) { e.preventDefault(); pick(ACTIONS[i][0]); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  });
+
   const copy = async (t) => { try { await navigator.clipboard.writeText(t); toast('Копирано'); } catch { /* ignore */ } };
   const showPhone = lead && (!free || isAdmin || me.role !== 'setter');
 
@@ -171,7 +182,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
                   {ACTIONS.map(([k, label]) => (
                     <button key={k} className={`status-btn st-${k} ${lead.status === k || mode === k ? 'on' : ''} ${k === 'booked' ? 'wide' : ''}`}
                       style={{ background: 'var(--surface2)' }} disabled={busy} aria-pressed={lead.status === k} onClick={() => pick(k)}>
-                      <span className="dot" /><span>{label}</span>
+                      <span className="dot" /><span>{label}</span><span className="kbd" aria-hidden="true">{ACTIONS.findIndex(a => a[0] === k) + 1}</span>
                     </button>
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { db } from './backend.js';
-import { Av, Badge, STATUS, fmtDay, relWhen, useToast } from './ui.jsx';
+import { Av, Badge, Icon, STATUS, fmt, fmtDay, relWhen, useToast } from './ui.jsx';
 import LeadPanel from './LeadPanel.jsx';
 import { go } from './App.jsx';
 
@@ -30,15 +30,30 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
   useEffect(() => { try { sessionStorage.setItem('crm-tab-' + view, tab); } catch { /* ignore */ } }, [tab, view]);
   useEffect(() => { db.profiles().then(setProfiles).catch(() => {}); db.imports().then(setImports).catch(() => {}); }, []);
 
+  const PAGE = 500;
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const rowsRef = useRef(null);
+  rowsRef.current = rows;
+  const v = view === 'leads' ? tab : view;
   const load = useCallback(async (quiet) => {
     const id = ++reqRef.current;
     if (!quiet) setRows(null);
     try {
-      const v = view === 'leads' ? (tab === 'all' ? 'all' : tab) : view;
-      const r = await db.leads({ view: v, me, importId, status, search: q });
-      if (id === reqRef.current) { setRows(r); setError(''); }
-    } catch (e) { if (id === reqRef.current) { setError(e.message); setRows([]); } }
-  }, [view, tab, me, importId, status, q]);
+      // при тихо опресняване презареждаме толкова, колкото вече са показани
+      const limit = quiet && rowsRef.current ? Math.max(PAGE, rowsRef.current.length) : PAGE;
+      const r = await db.leads({ view: v, me, importId, status, search: q, offset: 0, limit });
+      if (id === reqRef.current) { setRows(r); setHasMore(r.length >= limit); setError(''); }
+    } catch (e) { if (id === reqRef.current) { setError(e.message); if (!quiet) setRows([]); } }
+  }, [v, me, importId, status, q]);
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const r = await db.leads({ view: v, me, importId, status, search: q, offset: rows.length, limit: PAGE });
+      setRows(x => [...x, ...r.filter(n => !x.some(o => o.id === n.id))]); setHasMore(r.length >= PAGE);
+    } catch (e) { toast(e.message, true); }
+    setLoadingMore(false);
+  }
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -70,7 +85,6 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
     ? [['all', 'Всички'], ['free', 'Свободни'], ['taken', 'Взети']]
     : [['free', 'Свободни'], ['mine', 'Моите']];
   let shown = rows || [];
-  if (view === 'leads' && tab === 'taken') shown = shown.filter(r => r.setter_id);
 
   const whenCol = view === 'followups' ? 'follow_up_at' : view === 'calls' ? 'call_at' : null;
   const emptyText = {
@@ -84,7 +98,10 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
     <>
       <div className="page-head">
         <div><h1>{title}</h1><p>{sub}</p></div>
+        <div className="row">
+        {isAdmin && rows && rows.length > 0 && <button className="btn" onClick={() => exportCsv(shown, byId, impById)}><Icon name="download" size={16} />Експорт</button>}
         {tabs && <div className="tabs" role="tablist">{tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>}
+        </div>
       </div>
 
       <div className="filters">
@@ -137,7 +154,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
               </tbody>
             </table>
           )}
-        {rows && rows.length >= 2000 && <div className="more">Показани са първите 2000. Използвай филтрите или търсенето.</div>}
+        {hasMore && <div className="more"><button className="btn sm" disabled={loadingMore} onClick={loadMore}>{loadingMore ? 'Зареждам…' : `Покажи още (показани ${rows.length})`}</button></div>}
       </div>
 
       <div className="cards">
@@ -159,6 +176,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
                 </div>
               );
             })}
+        {hasMore && <button className="btn" disabled={loadingMore} onClick={loadMore}>{loadingMore ? 'Зареждам…' : 'Покажи още'}</button>}
       </div>
 
       {openId && <LeadPanel key={openId} id={openId} me={me} profiles={profiles} imports={impById} onClose={close} onChanged={changed} />}
@@ -171,4 +189,18 @@ export function maskPhone(l, me) {
   if (!l.phone) return '—';
   if (me.role === 'setter' && !l.setter_id) return l.phone.slice(0, -6) + ' ••• •••';
   return l.phone;
+}
+
+function exportCsv(rows, byId, impById) {
+  // защита от формули при отваряне в Excel (=, +, -, @)
+  const esc = v => { let x = String(v ?? ''); if (/^[=+\-@\t\r]/.test(x) && !/^\+\d+$/.test(x)) x = "'" + x; return `"${x.replace(/"/g, '""')}"`; };
+  const head = ['Име', 'Телефон', 'Имейл', 'Статус', 'Уебинар', 'Сетър', 'Клоузър', 'Фолоу ъп', 'Разговор', 'Получен'];
+  const lines = rows.map(r => [r.full_name, r.phone, r.email, STATUS[r.status], impById[r.import_id]?.name, byId[r.setter_id]?.full_name, byId[r.closer_id]?.full_name,
+    r.follow_up_at ? fmt(r.follow_up_at) : '', r.call_at ? fmt(r.call_at) : '', fmt(r.lead_created_at || r.created_at)].map(esc).join(','));
+  const blob = new Blob(['\uFEFF' + [head.map(esc).join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `lidove-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

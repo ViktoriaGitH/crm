@@ -39,9 +39,10 @@ export default function ImportPage({ me }) {
   const built = useMemo(() => (rows && map ? buildLeads(rows, map, qs) : null), [rows, map, qs]);
   const sample = rows ? rows[1] || [] : [];
 
+  const noCols = map && map.name < 0 && map.first < 0 && map.phone < 0 && map.email < 0;
   async function doImport() {
-    if (!built?.leads.length) return;
-    if (map.name < 0 && map.first < 0) { toast('Избери колона за име', true); return; }
+    if (!built?.leads.length || noCols) return;
+    if (map.phone < 0 && map.email < 0) { toast('Избери колона за телефон или имейл', true); return; }
     setProgress([0, built.leads.length]);
     try {
       const r = await db.importLeads(me, { name: name.trim() || file.name, fileName: file.name }, built.leads, (a, b) => setProgress([a, b]));
@@ -101,6 +102,7 @@ export default function ImportPage({ me }) {
               {built.empty > 0 && <div className="stat"><b>{built.empty}</b><span>празни реда</span></div>}
             </div>
           </div>
+          {noCols && <div className="box"><div className="err">Не разпознах колони за име, телефон или имейл. Провери дали това е правилният файл или избери колоните ръчно по-долу.</div></div>}
           <div className="box">
             <label className="field">Име на уебинара<input className="input" value={name} onChange={e => setName(e.target.value)} maxLength={80} /></label>
           </div>
@@ -133,7 +135,7 @@ export default function ImportPage({ me }) {
               </div>
             ))}
             {progress && <div className="progress" style={{ margin: '12px 0' }}><div style={{ width: `${(progress[0] / progress[1]) * 100}%` }} /></div>}
-            <button className="btn primary big" style={{ marginTop: 10 }} disabled={!built.leads.length || !!progress} onClick={doImport}>
+            <button className="btn primary big" style={{ marginTop: 10 }} disabled={!built.leads.length || !!progress || noCols || (map.phone < 0 && map.email < 0)} onClick={doImport}>
               {progress ? `Импортирам… ${progress[0]}/${progress[1]}` : `Импортирай ${built.leads.length} лийда`}
             </button>
           </div>

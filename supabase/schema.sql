@@ -1,6 +1,7 @@
 -- =====================================================================
 --  CRM — схема за Supabase
 --  Пусни целия файл веднъж: Supabase → SQL Editor → New query → Run
+--  (можеш да го пуснеш и повторно — нищо не се дублира)
 -- =====================================================================
 
 
@@ -57,6 +58,8 @@ create table if not exists public.leads (
 create index if not exists leads_status_idx    on public.leads (status);
 create index if not exists leads_setter_idx    on public.leads (setter_id);
 create index if not exists leads_import_idx    on public.leads (import_id);
+create index if not exists leads_closer_idx    on public.leads (closer_id);
+create index if not exists leads_created_idx   on public.leads (lead_created_at desc nulls last, created_at desc);
 create index if not exists leads_follow_up_idx on public.leads (follow_up_at) where status = 'follow_up';
 create index if not exists leads_call_idx      on public.leads (call_at) where status = 'booked';
 
@@ -69,6 +72,8 @@ create table if not exists public.lead_events (
   created_at  timestamptz not null default now()
 );
 create index if not exists lead_events_lead_idx on public.lead_events (lead_id, created_at desc);
+create index if not exists lead_events_user_idx on public.lead_events (user_id);
+create index if not exists imports_created_by_idx on public.imports (created_by);
 
 -- ---------- помощни функции ----------
 create or replace function public.my_role()
@@ -84,14 +89,15 @@ $$;
 -- нов потребител в auth → профил (първият става админ)
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare first_user boolean;
 begin
-  insert into public.profiles (id, email, full_name, role)
-  values (
-    new.id,
-    new.email,
+  first_user := not exists (select 1 from public.profiles);
+  -- само първият потребител е активен автоматично (админ); всички останали ги активира админът
+  insert into public.profiles (id, email, full_name, role, active)
+  values (new.id, new.email,
     coalesce(new.raw_user_meta_data ->> 'full_name', split_part(new.email, '@', 1)),
-    case when exists (select 1 from public.profiles) then 'setter'::public.user_role else 'admin'::public.user_role end
-  )
+    case when first_user then 'admin'::public.user_role else 'setter'::public.user_role end,
+    first_user)
   on conflict (id) do nothing;
   return new;
 end $$;
@@ -107,8 +113,15 @@ begin
   new.updated_at := now();
   if auth.uid() is not null and not public.is_admin()
      and coalesce(current_setting('crm.trusted', true), '') <> 'on' then
+    -- сетър/клоузър могат да сменят само статус, фолоу ъп и бележки
     new.import_id   := old.import_id;
     new.external_id := old.external_id;
+    new.full_name   := old.full_name;
+    new.phone       := old.phone;
+    new.email       := old.email;
+    new.answers     := old.answers;
+    new.lead_created_at := old.lead_created_at;
+    new.created_at  := old.created_at;
     new.setter_id   := old.setter_id;
     new.claimed_at  := old.claimed_at;
     new.closer_id   := old.closer_id;
@@ -118,6 +131,7 @@ begin
     if (new.status = 'booked') <> (old.status = 'booked') then
       new.status := old.status;
     end if;
+    if length(new.notes) > 5000 then new.notes := left(new.notes, 5000); end if;
   end if;
   if new.status <> 'follow_up' then new.follow_up_at := null; end if;
   return new;
@@ -197,42 +211,91 @@ alter table public.imports     enable row level security;
 alter table public.leads       enable row level security;
 alter table public.lead_events enable row level security;
 
-drop policy if exists profiles_read  on public.profiles;
+drop policy if exists profiles_read on public.profiles;
 drop policy if exists profiles_admin on public.profiles;
-create policy profiles_read  on public.profiles for select to authenticated using (public.my_role() is not null);
-create policy profiles_admin on public.profiles for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy profiles_read on public.profiles for select to authenticated using ((select public.my_role()) is not null);
+create policy profiles_admin on public.profiles for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 
-drop policy if exists imports_read  on public.imports;
-drop policy if exists imports_admin on public.imports;
-create policy imports_read  on public.imports for select to authenticated using (public.my_role() is not null);
-create policy imports_admin on public.imports for all    to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists imports_read on public.imports;
+drop policy if exists imports_admin_ins on public.imports;
+drop policy if exists imports_admin_upd on public.imports;
+drop policy if exists imports_admin_del on public.imports;
+create policy imports_read on public.imports for select to authenticated using ((select public.my_role()) is not null);
+create policy imports_admin_ins on public.imports for insert to authenticated with check ((select public.is_admin()));
+create policy imports_admin_upd on public.imports for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy imports_admin_del on public.imports for delete to authenticated using ((select public.is_admin()));
 
-drop policy if exists leads_admin        on public.leads;
-drop policy if exists leads_setter_read  on public.leads;
-drop policy if exists leads_setter_write on public.leads;
-drop policy if exists leads_closer_read  on public.leads;
-drop policy if exists leads_closer_write on public.leads;
-create policy leads_admin on public.leads for all to authenticated
-  using (public.is_admin()) with check (public.is_admin());
-create policy leads_setter_read on public.leads for select to authenticated
-  using (public.my_role() = 'setter' and (setter_id is null or setter_id = auth.uid()));
-create policy leads_setter_write on public.leads for update to authenticated
-  using (public.my_role() = 'setter' and setter_id = auth.uid())
-  with check (setter_id = auth.uid());
-create policy leads_closer_read on public.leads for select to authenticated
-  using (public.my_role() = 'closer' and status = 'booked' and closer_id = auth.uid());
-create policy leads_closer_write on public.leads for update to authenticated
-  using (public.my_role() = 'closer' and closer_id = auth.uid())
-  with check (closer_id = auth.uid());
+drop policy if exists leads_read on public.leads;
+drop policy if exists leads_insert on public.leads;
+drop policy if exists leads_delete on public.leads;
+drop policy if exists leads_update on public.leads;
+create policy leads_read on public.leads for select to authenticated using (
+  (select public.is_admin())
+  or ((select public.my_role()) = 'setter' and (setter_id is null or setter_id = (select auth.uid())))
+  or ((select public.my_role()) = 'closer' and status = 'booked' and closer_id = (select auth.uid())));
+create policy leads_insert on public.leads for insert to authenticated with check ((select public.is_admin()));
+create policy leads_delete on public.leads for delete to authenticated using ((select public.is_admin()));
+create policy leads_update on public.leads for update to authenticated using (
+  (select public.is_admin())
+  or ((select public.my_role()) = 'setter' and setter_id = (select auth.uid()))
+  or ((select public.my_role()) = 'closer' and closer_id = (select auth.uid())))
+  with check (
+  (select public.is_admin())
+  or ((select public.my_role()) = 'setter' and setter_id = (select auth.uid()))
+  or ((select public.my_role()) = 'closer' and closer_id = (select auth.uid())));
 
-drop policy if exists events_read   on public.lead_events;
+drop policy if exists events_read on public.lead_events;
 drop policy if exists events_insert on public.lead_events;
 create policy events_read on public.lead_events for select to authenticated
   using (exists (select 1 from public.leads l where l.id = lead_id));
+-- потребителите добавят ръчно само бележки; останалото го пише системата
 create policy events_insert on public.lead_events for insert to authenticated
-  with check (user_id = auth.uid() and exists (select 1 from public.leads l where l.id = lead_id));
+  with check (user_id = (select auth.uid()) and type = 'note'
+              and exists (select 1 from public.leads l where l.id = lead_id));
 
+-- бързи показатели за таблото (спазва правата на потребителя)
+create or replace function public.crm_stats()
+returns jsonb language sql stable security invoker set search_path = public as $$
+  with l as (select * from public.leads),
+  me as (select auth.uid() as id)
+  select jsonb_build_object(
+    'total', (select count(*) from l),
+    'free', (select count(*) from l where setter_id is null),
+    'by_status', coalesce((select jsonb_object_agg(status, n) from (select status, count(*) n from l group by status) s), '{}'::jsonb),
+    'mine_by_status', coalesce((select jsonb_object_agg(status, n) from (select status, count(*) n from l, me where l.setter_id = me.id group by status) s), '{}'::jsonb),
+    'setters', coalesce((select jsonb_agg(x) from (
+        select setter_id as id, count(*) as taken,
+               count(*) filter (where status <> 'new') as worked,
+               count(*) filter (where status = 'booked') as booked
+        from l where setter_id is not null group by setter_id) x), '[]'::jsonb),
+    'imports', coalesce((select jsonb_agg(x) from (
+        select import_id as id, count(*) as total,
+               count(*) filter (where setter_id is null) as free,
+               count(*) filter (where status <> 'new') as worked,
+               count(*) filter (where status = 'booked') as booked
+        from l where import_id is not null group by import_id) x), '[]'::jsonb)
+  )
+$$;
+
+-- ---------- права върху функциите ----------
+revoke execute on function public.claim_lead(uuid), public.release_lead(uuid), public.assign_lead(uuid, uuid),
+                           public.my_role(), public.is_admin(),
+                           public.handle_new_user(), public.leads_guard(), public.leads_log() from public;
+do $$ begin
+  revoke execute on function public.claim_lead(uuid), public.release_lead(uuid), public.assign_lead(uuid, uuid),
+                             public.my_role(), public.is_admin(),
+                             public.handle_new_user(), public.leads_guard(), public.leads_log() from anon;
+  revoke execute on function public.handle_new_user(), public.leads_guard(), public.leads_log() from authenticated;
+exception when undefined_object then null; end $$;
 grant usage on type public.user_role, public.lead_status to authenticated;
 grant execute on function public.claim_lead(uuid), public.release_lead(uuid), public.assign_lead(uuid, uuid),
-                          public.my_role(), public.is_admin() to authenticated;
-revoke execute on function public.claim_lead(uuid), public.release_lead(uuid), public.assign_lead(uuid, uuid) from anon;
+                          public.my_role(), public.is_admin(), public.crm_stats() to authenticated;
+revoke execute on function public.crm_stats() from public;
+
+-- права върху таблиците (сигурността идва от правилата по-горе)
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.profiles, public.imports, public.leads, public.lead_events to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+-- анонимни посетители нямат достъп до нищо
+revoke all on public.profiles, public.imports, public.leads, public.lead_events from anon;

@@ -5,7 +5,8 @@ export async function readTable(file) {
   const name = (file.name || '').toLowerCase();
   if (name.endsWith('.xlsx')) {
     const { default: readXlsxFile } = await import('read-excel-file');
-    const rows = await readXlsxFile(file);
+    let rows;
+    try { rows = await readXlsxFile(file); } catch { throw new Error('Файлът не е валиден Excel (.xlsx). Отвори го и го запиши отново или го изтегли като CSV.'); }
     return rows.map(r => r.map(c => (c == null ? '' : c instanceof Date ? c.toISOString() : String(c))));
   }
   if (name.endsWith('.xls')) throw new Error('Стар .xls формат не се поддържа. Запиши файла като .xlsx или .csv.');
@@ -108,7 +109,7 @@ export function buildLeads(rows, mapping, questions) {
   for (const r of rows.slice(1)) {
     let full_name = get(r, mapping.name);
     if (!full_name) full_name = [get(r, mapping.first), get(r, mapping.last)].filter(Boolean).join(' ');
-    full_name = full_name.replace(/\s+/g, ' ');
+    full_name = full_name.replace(/\s+/g, ' ').slice(0, 200);
     const phone = normPhone(get(r, mapping.phone));
     const email = get(r, mapping.email).toLowerCase();
     if (!full_name && !phone && !email) { empty++; continue; }
@@ -118,9 +119,9 @@ export function buildLeads(rows, mapping, questions) {
     if (key && seen.has(key)) { duplicates++; continue; }
     if (key) seen.add(key);
     const answers = questions.filter(q => q.include)
-      .map(q => ({ q: q.label, a: cleanAnswer(r[q.index]) }))
+      .map(q => ({ q: q.label.slice(0, 300), a: cleanAnswer(r[q.index]).slice(0, 3000) }))
       .filter(x => x.a);
-    out.push({ external_id, full_name: full_name || '(без име)', phone: phone || null, email: email || null, answers, lead_created_at: parseDate(get(r, mapping.created)) });
+    out.push({ external_id: external_id && external_id.slice(0, 200), full_name: full_name || '(без име)', phone: phone ? phone.slice(0, 40) : null, email: email ? email.slice(0, 200) : null, answers, lead_created_at: parseDate(get(r, mapping.created)) });
   }
   return { leads: out, duplicates, empty };
 }

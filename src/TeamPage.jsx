@@ -5,27 +5,17 @@ import { Av, Modal, ROLE, useToast } from './ui.jsx';
 export default function TeamPage({ me }) {
   const toast = useToast();
   const [people, setPeople] = useState(null);
-  const [leads, setLeads] = useState([]);
+  const [st, setSt] = useState(null);
   const [edit, setEdit] = useState(null);     // {} = нов, профил = редакция
 
   const load = () => {
     db.profiles().then(setPeople).catch(e => toast(e.message, true));
-    db.leads({ view: 'all', me }).then(setLeads).catch(() => {});
+    db.stats().then(setSt).catch(() => {});
   };
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const stats = useMemo(() => {
-    const s = {};
-    for (const l of leads) {
-      if (l.setter_id) {
-        const x = (s[l.setter_id] ||= { taken: 0, booked: 0, fu: 0, no: 0 });
-        x.taken++; if (l.status === 'booked') x.booked++; if (l.status === 'follow_up') x.fu++; if (l.status === 'no_answer') x.no++;
-      }
-      if (l.closer_id && l.status === 'booked') { const y = (s[l.closer_id] ||= { calls: 0 }); y.calls = (y.calls || 0) + 1; }
-    }
-    return s;
-  }, [leads]);
-  const free = leads.filter(l => !l.setter_id).length;
+  const stats = useMemo(() => Object.fromEntries(((st && st.setters) || []).map(x => [x.id, x])), [st]);
+  const bs = (st && st.by_status) || {};
 
   return (
     <>
@@ -35,16 +25,16 @@ export default function TeamPage({ me }) {
       </div>
 
       <div className="stats" style={{ marginBottom: 16 }}>
-        <div className="stat"><b>{leads.length}</b><span>лийда общо</span></div>
-        <div className="stat"><b>{free}</b><span>свободни</span></div>
-        <div className="stat"><b>{leads.filter(l => l.status === 'booked').length}</b><span>записани разговора</span></div>
-        <div className="stat"><b>{leads.filter(l => l.status === 'follow_up').length}</b><span>фолоу ъпа</span></div>
+        <div className="stat"><b>{st ? st.total : '…'}</b><span>лийда общо</span></div>
+        <div className="stat"><b>{st ? st.free : '…'}</b><span>свободни</span></div>
+        <div className="stat"><b>{bs.booked || 0}</b><span>записани разговора</span></div>
+        <div className="stat"><b>{bs.follow_up || 0}</b><span>фолоу ъпа</span></div>
       </div>
 
       <div className="card">
         {people === null && <div className="loading-row" />}
         {people?.map(p => {
-          const st = stats[p.id] || {};
+          const ps = stats[p.id] || {};
           return (
             <div key={p.id} className={`box row team-row ${p.active ? '' : 'off'}`}>
               <Av name={p.full_name} />
@@ -52,8 +42,8 @@ export default function TeamPage({ me }) {
                 <div className="row" style={{ gap: 8 }}><b>{p.full_name}</b><span className={`role-tag ${p.role}`}>{ROLE[p.role]}</span>{!p.active && <span className="role-tag">спрян</span>}{p.id === me.id && <span className="faint" style={{ fontSize: 13 }}>(ти)</span>}</div>
                 <div className="faint" style={{ fontSize: 13 }}>
                   {p.email}
-                  {p.role === 'setter' && ` · взети ${st.taken || 0} · записани ${st.booked || 0} · фолоу ъп ${st.fu || 0}`}
-                  {p.role === 'closer' && ` · разговори ${st.calls || 0}${p.cal_link ? '' : ' · ⚠ няма Cal.com линк'}`}
+                  {p.role === 'setter' && ` · взети ${ps.taken || 0} · обработени ${ps.worked || 0} · записани ${ps.booked || 0}`}
+                  {p.role === 'closer' && (p.cal_link ? ' · Cal.com свързан' : ' · ⚠ няма Cal.com линк')}
                 </div>
               </div>
               <button className="btn sm" onClick={() => setEdit(p)}>Редактирай</button>

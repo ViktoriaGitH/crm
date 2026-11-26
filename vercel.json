@@ -1,0 +1,5 @@
+{
+  "framework": "vite",
+  "rewrites": [{ "source": "/((?!api/|assets/).*)", "destination": "/index.html" }],
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }, { "key": "X-Frame-Options", "value": "DENY" }] }]
+}

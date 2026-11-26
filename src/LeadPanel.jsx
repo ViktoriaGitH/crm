@@ -1,0 +1,228 @@
+import { useCallback, useEffect, useState } from 'react';
+import { db } from './backend.js';
+import { Av, Badge, Icon, STATUS, fmt, fmtLong, toLocalInput, useEsc, useToast } from './ui.jsx';
+import Booking from './Booking.jsx';
+
+const ACTIONS = [
+  ['answered', 'Вдигна'],
+  ['no_answer', 'Не вдигна'],
+  ['wrong_number', 'Грешен номер'],
+  ['follow_up', 'Фолоу ъп'],
+  ['booked', 'Записан разговор']
+];
+
+const EV = {
+  claimed: () => 'взе лийда',
+  released: () => 'освободи лийда',
+  assigned: () => 'прехвърли лийда',
+  booked: (d) => `записа разговор за ${fmt(d.call_at)}`,
+  note: (d) => `бележка: „${d.text}“`,
+  status: (d) => d.to === 'follow_up' ? `фолоу ъп за ${fmt(d.follow_up_at)}` : `статус: ${STATUS[d.to] || d.to}`
+};
+
+export default function LeadPanel({ id, me, profiles, imports, onClose, onChanged }) {
+  const toast = useToast();
+  const [lead, setLead] = useState(undefined);
+  const [events, setEvents] = useState([]);
+  const [mode, setMode] = useState(null);            // 'follow_up' | 'booked' | null
+  const [busy, setBusy] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [fuAt, setFuAt] = useState('');
+  useEsc(onClose);
+
+  const byId = Object.fromEntries(profiles.map(p => [p.id, p]));
+  const load = useCallback(async () => {
+    try {
+      const l = await db.lead(id);
+      setLead(l);
+      if (l) { setNotes(l.notes || ''); db.events(id).then(setEvents).catch(() => {}); }
+    } catch { setLead(null); }
+  }, [id]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, []);
+
+  const isAdmin = me.role === 'admin';
+  const mine = lead && lead.setter_id === me.id;
+  const canEdit = lead && (isAdmin || mine);
+  const free = lead && !lead.setter_id;
+  const setter = lead && byId[lead.setter_id];
+  const closer = lead && byId[lead.closer_id];
+
+  async function run(fn, ok) {
+    setBusy(true);
+    try { await fn(); if (ok) toast(ok); await load(); onChanged?.(); }
+    catch (e) { toast(e.message || 'Грешка', true); }
+    setBusy(false);
+  }
+
+  const claim = () => run(async () => {
+    const r = await db.claim(lead.id);
+    if (!r) throw new Error('Някой друг току-що го взе');
+  }, 'Лийдът е твой — звънни!');
+  const release = () => run(() => db.release(lead.id), 'Лийдът е освободен');
+  const setStatus = (s) => run(() => db.update(lead.id, { status: s }), `Записано: ${STATUS[s]}`);
+  const saveNotes = () => run(() => db.update(lead.id, { notes }), 'Бележката е запазена');
+
+  function pick(s) {
+    if (s === 'follow_up') {
+      const d = lead.follow_up_at ? new Date(lead.follow_up_at) : (() => { const x = new Date(); x.setDate(x.getDate() + 1); x.setHours(10, 0, 0, 0); return x; })();
+      setFuAt(toLocalInput(d)); setMode(mode === 'follow_up' ? null : 'follow_up'); return;
+    }
+    if (s === 'booked') { setMode(mode === 'booked' ? null : 'booked'); return; }
+    setMode(null); setStatus(s);
+  }
+  function quick(kind) {
+    const d = new Date();
+    if (kind === '1h') d.setHours(d.getHours() + 1, d.getMinutes(), 0, 0);
+    if (kind === '3h') d.setHours(d.getHours() + 3, d.getMinutes(), 0, 0);
+    if (kind === 'eve') { d.setHours(18, 0, 0, 0); if (d < new Date()) d.setDate(d.getDate() + 1); }
+    if (kind === 'tom') { d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); }
+    if (kind === '2d') { d.setDate(d.getDate() + 2); d.setHours(10, 0, 0, 0); }
+    setFuAt(toLocalInput(d));
+  }
+  function saveFollowUp() {
+    const d = new Date(fuAt);
+    if (!fuAt || isNaN(d)) { toast('Избери дата и час', true); return; }
+    if (d < new Date(Date.now() - 60000)) { toast('Избери час в бъдещето', true); return; }
+    run(async () => { await db.update(lead.id, { status: 'follow_up', follow_up_at: d.toISOString() }); setMode(null); }, `Фолоу ъп: ${fmt(d)}`);
+  }
+
+  const copy = async (t) => { try { await navigator.clipboard.writeText(t); toast('Копирано'); } catch { /* ignore */ } };
+  const showPhone = lead && (!free || isAdmin || me.role !== 'setter');
+
+  return (
+    <>
+      <div className="overlay" onClick={onClose} />
+      <aside className="panel" role="dialog" aria-modal="true" aria-label={lead?.full_name || 'Лийд'}>
+        <div className="panel-head">
+          <div className="grow">
+            <h2>{lead === undefined ? 'Зареждам…' : lead ? lead.full_name : 'Лийдът не е намерен'}</h2>
+            {lead && <div className="row" style={{ marginTop: 8, gap: 8 }}>
+              <Badge status={lead.status} />
+              {imports[lead.import_id] && <span className="faint" style={{ fontSize: 13 }}>{imports[lead.import_id].name}</span>}
+            </div>}
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Затвори"><Icon name="x" /></button>
+        </div>
+
+        {lead === null && <div className="panel-body"><p className="muted">Възможно е друг сетър да го е взел или да нямаш достъп до него.</p></div>}
+
+        {lead && (
+          <div className="panel-body">
+            {free && me.role === 'setter' && (
+              <div className="claim-box">
+                <b>Този лийд е свободен</b>
+                <span className="muted" style={{ fontSize: 14 }}>Вземи го, за да видиш телефона и да отбележиш разговора.</span>
+                <button className="btn primary big" disabled={busy} onClick={claim}>Взимам лийда</button>
+              </div>
+            )}
+
+            {lead.status === 'booked' && (
+              <div className="call-card">
+                <span className="faint" style={{ fontSize: 13, fontWeight: 600 }}>ЗАПИСАН РАЗГОВОР</span>
+                <b>{fmtLong(lead.call_at)}</b>
+                {closer && <span className="muted" style={{ fontSize: 14 }}>с {closer.full_name}</span>}
+              </div>
+            )}
+            {lead.status === 'follow_up' && lead.follow_up_at && (
+              <div className="fu-card">
+                <span className="faint" style={{ fontSize: 13, fontWeight: 600 }}>ФОЛОУ ЪП</span>
+                <b>{fmtLong(lead.follow_up_at)}</b>
+              </div>
+            )}
+
+            <section>
+              <p className="sec-t">Контакт</p>
+              <div className="contact">
+                <div className="contact-row"><span className="lbl">Име</span><span className="val">{lead.full_name}</span></div>
+                <div className="contact-row">
+                  <span className="lbl">Телефон</span>
+                  {showPhone ? <>
+                    <span className="val">{lead.phone || '—'}</span>
+                    {lead.phone && <a className="btn primary sm" href={`tel:${lead.phone}`}><Icon name="phone" size={15} />Звънни</a>}
+                    {lead.phone && <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => copy(lead.phone)} aria-label="Копирай телефона"><Icon name="copy" size={15} /></button>}
+                  </> : <span className="val masked">{lead.phone ? lead.phone.slice(0, -6) + ' ••• •••' : '—'}</span>}
+                </div>
+                <div className="contact-row">
+                  <span className="lbl">Имейл</span><span className="val">{lead.email || '—'}</span>
+                  {lead.email && showPhone && <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => copy(lead.email)} aria-label="Копирай имейла"><Icon name="copy" size={15} /></button>}
+                </div>
+                <div className="contact-row"><span className="lbl">Получен</span><span className="val">{fmt(lead.lead_created_at || lead.created_at)}</span></div>
+                <div className="contact-row"><span className="lbl">Сетър</span>
+                  <span className="val">{setter ? <span className="setter-chip"><Av name={setter.full_name} />{setter.full_name}</span> : <span className="faint">свободен</span>}</span>
+                  {canEdit && !free && lead.status !== 'booked' && <button className="btn ghost sm" disabled={busy} onClick={release}>Освободи</button>}
+                </div>
+                {isAdmin && (
+                  <label className="contact-row"><span className="lbl">Прехвърли</span>
+                    <select className="input" style={{ minHeight: 36, fontSize: 14 }} value={lead.setter_id || ''} disabled={busy || lead.status === 'booked'}
+                      onChange={e => run(() => db.assign(lead.id, e.target.value || null), 'Прехвърлен')}>
+                      <option value="">— свободен —</option>
+                      {profiles.filter(p => p.role !== 'closer' && p.active).map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+            </section>
+
+            {canEdit && lead.status !== 'booked' && (
+              <section>
+                <p className="sec-t">Какво стана при разговора?</p>
+                <div className="status-grid">
+                  {ACTIONS.map(([k, label]) => (
+                    <button key={k} className={`status-btn st-${k} ${lead.status === k || mode === k ? 'on' : ''} ${k === 'booked' ? 'wide' : ''}`}
+                      style={{ background: 'var(--surface2)' }} disabled={busy} aria-pressed={lead.status === k} onClick={() => pick(k)}>
+                      <span className="dot" /><span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+                {mode === 'follow_up' && (
+                  <div className="sub-box" style={{ marginTop: 10 }}>
+                    <b>Кога да го потърсиш отново?</b>
+                    <div className="chips">
+                      {[['1h', 'След 1 час'], ['3h', 'След 3 часа'], ['eve', 'Довечера 18:00'], ['tom', 'Утре 10:00'], ['2d', 'След 2 дни']].map(([k, l]) =>
+                        <button key={k} type="button" className="chip" onClick={() => quick(k)}>{l}</button>)}
+                    </div>
+                    <input className="input" type="datetime-local" value={fuAt} min={toLocalInput(new Date())} onChange={e => setFuAt(e.target.value)} aria-label="Дата и час за фолоу ъп" />
+                    <div className="row"><button className="btn primary grow" disabled={busy} onClick={saveFollowUp}>Запази фолоу ъп</button><button className="btn ghost" onClick={() => setMode(null)}>Отказ</button></div>
+                  </div>
+                )}
+                {mode === 'booked' && (
+                  <div className="sub-box" style={{ marginTop: 10 }}>
+                    <Booking lead={lead} profiles={profiles} onBooked={() => { setMode(null); load(); onChanged?.(); }} />
+                  </div>
+                )}
+              </section>
+            )}
+
+            <section>
+              <p className="sec-t">Анкета</p>
+              {Array.isArray(lead.answers) && lead.answers.length ? (
+                <div className="qa">{lead.answers.map((x, i) => <div key={i}><b>{x.q}</b><span>{x.a}</span></div>)}</div>
+              ) : <p className="faint" style={{ margin: 0, fontSize: 14 }}>Няма отговори от анкета.</p>}
+            </section>
+
+            {(canEdit || lead.closer_id === me.id) && (
+              <section>
+                <p className="sec-t">Бележки</p>
+                <textarea className="input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Какво каза, кога е удобно, възражения…" />
+                {notes !== (lead.notes || '') && <div className="row" style={{ marginTop: 8 }}><button className="btn primary" disabled={busy} onClick={saveNotes}>Запази бележката</button><button className="btn ghost" onClick={() => setNotes(lead.notes || '')}>Отказ</button></div>}
+              </section>
+            )}
+
+            {events.length > 0 && (
+              <section>
+                <p className="sec-t">История</p>
+                <div className="events">
+                  {events.map(e => (
+                    <div className="ev" key={e.id}><time>{fmt(e.created_at)}</time>
+                      <span><b>{byId[e.user_id]?.full_name || 'Система'}</b> {(EV[e.type] || (() => e.type))(e.data || {})}</span></div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}

@@ -348,3 +348,14 @@ textarea.input { resize: vertical; line-height: 1.5; }
 
 .kcard { color: var(--text); } .kcard .k-top b { color: var(--text); }
 .board .col { color: var(--text); background: var(--surface); } .board .col-head b { color: var(--st); }
+
+/* мек, равномерен „глоу“ на основните бутони */
+:root, [data-theme="dark"] { --glow: 0 0 0 1px rgba(198, 244, 50, .35), 0 0 18px rgba(198, 244, 50, .28), 0 0 42px rgba(198, 244, 50, .12);
+  --glow-hi: 0 0 0 1px rgba(198, 244, 50, .55), 0 0 22px rgba(198, 244, 50, .42), 0 0 56px rgba(198, 244, 50, .18); }
+[data-theme="light"] { --glow: 0 0 0 1px rgba(11, 11, 12, .9), 0 4px 14px rgba(11, 11, 12, .18), 0 0 18px rgba(198, 244, 50, .35);
+  --glow-hi: 0 0 0 1px rgba(11, 11, 12, 1), 0 6px 20px rgba(11, 11, 12, .22), 0 0 26px rgba(198, 244, 50, .55); }
+.btn.primary, .tabs button.on, .brand-mark, .chip.on, .slot.on, .day.on { box-shadow: var(--glow); transition: box-shadow .25s ease, background .2s ease, transform .15s ease; }
+.btn.primary:hover:not(:disabled) { box-shadow: var(--glow-hi); }
+.btn.primary:active:not(:disabled) { transform: translateY(1px); }
+.btn.primary:disabled { box-shadow: none; }
+.input:focus { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 18px rgba(198, 244, 50, .15); }

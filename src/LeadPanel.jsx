@@ -28,6 +28,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState('');
   const [fuAt, setFuAt] = useState('');
+  const [askDel, setAskDel] = useState(false);
   useEsc(onClose);
 
   const byId = Object.fromEntries(profiles.map(p => [p.id, p]));
@@ -219,6 +220,18 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
                 <p className="sec-t">Бележки</p>
                 <textarea className="input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Какво каза, кога е удобно, възражения…" />
                 {notes !== (lead.notes || '') && <div className="row" style={{ marginTop: 8 }}><button className="btn primary" disabled={busy} onClick={saveNotes}>Запази бележката</button><button className="btn ghost" onClick={() => setNotes(lead.notes || '')}>Отказ</button></div>}
+              </section>
+            )}
+
+            {isAdmin && (
+              <section>
+                {!askDel ? <button className="btn ghost sm danger" onClick={() => setAskDel(true)}>Изтрий лийда (тестов / грешен)</button> : (
+                  <div className="sub-box">
+                    <b>Да изтрия ли {lead.full_name}?</b>
+                    <span className="muted" style={{ fontSize: 14 }}>Изчезва от списъците и статистиката заедно с историята. Не може да се върне.{lead.booking_uid ? ' Разговорът в Cal.com остава — откажи го там.' : ''}</span>
+                    <div className="row"><button className="btn primary grow" disabled={busy} onClick={async () => { setBusy(true); try { await db.deleteLead(lead.id); toast('Лийдът е изтрит'); onChanged?.(); onClose(); } catch (e) { toast(e.message, true); setBusy(false); } }}>Да, изтрий</button><button className="btn" onClick={() => setAskDel(false)}>Отказ</button></div>
+                  </div>
+                )}
               </section>
             )}
 

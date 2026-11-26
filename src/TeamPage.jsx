@@ -71,7 +71,10 @@ function UserForm({ user, me, onClose, onSaved }) {
   };
 
   async function save(e) {
-    e.preventDefault(); setError(''); setBusy(true);
+    e.preventDefault(); setError('');
+    const cl = f.cal_link.trim().replace(/^(https?:\/\/)?(www\.)?(app\.)?cal\.com\//i, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '');
+    if (cl && !/^[^/\s]+\/[^/\s]+$/.test(cl)) { setError('Cal.com линкът трябва да е към конкретно събитие: cal.com/потребител/събитие (например cal.com/ime/razgovor). Копирай го от Event Types → линка на събитието.'); return; }
+    setBusy(true);
     try {
       if (isNew) await db.createUser({ full_name: f.full_name, email: f.email, role: f.role, cal_link: f.cal_link, password: f.password });
       else await db.updateUser({ id: user.id, full_name: f.full_name, role: f.role, cal_link: f.cal_link, active: f.active, ...(f.password ? { password: f.password } : {}) });

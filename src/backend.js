@@ -87,6 +87,7 @@ function supabaseBackend() {
       return { inserted, skipped: leads.length - inserted };
     },
     async deleteImport(id) { check(await sb.from('imports').delete().eq('id', id)); },
+    async deleteLead(id) { check(await sb.from('leads').delete().eq('id', id)); },
 
     slots: (closerId, start, end, tz) => fn('slots', { closer_id: closerId, start, end, timeZone: tz }),
     book: (leadId, closerId, start, tz) => fn('book', { lead_id: leadId, closer_id: closerId, start, timeZone: tz }),
@@ -189,6 +190,7 @@ function demoBackend() {
       imp.lead_count = n; if (n) S.I.push(imp); onProgress?.(leads.length, leads.length); save();
       return { inserted: n, skipped: leads.length - n };
     },
+    async deleteLead(id) { S.L = S.L.filter(l => l.id !== id); save(); },
     async deleteImport(id) { S.I = S.I.filter(i => i.id !== id); S.L = S.L.filter(l => l.import_id !== id); save(); },
     async slots(_c, start, end) {
       await wait(250); const data = {}; const d = new Date(start + 'T00:00:00'); const e = new Date(end + 'T00:00:00');

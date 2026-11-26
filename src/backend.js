@@ -44,7 +44,7 @@ function supabaseBackend() {
     imports: async () => check(await sb.from('imports').select('*').order('created_at', { ascending: false })),
 
     async leads({ view, me, importId, status, search, offset = 0, limit = 500 }) {
-      let q = sb.from('leads').select('id,full_name,phone,email,status,setter_id,closer_id,import_id,follow_up_at,call_at,lead_created_at,created_at,updated_at');
+      let q = sb.from('leads').select('id,full_name,phone,email,status,setter_id,closer_id,import_id,follow_up_at,call_at,lead_created_at,created_at,updated_at,source,outcome,package_id,sale_price,discount');
       if (view === 'free') q = q.is('setter_id', null);
       if (view === 'mine') q = q.eq('setter_id', me.id);
       if (view === 'taken') q = q.not('setter_id', 'is', null);
@@ -88,6 +88,16 @@ function supabaseBackend() {
     },
     async deleteImport(id) { check(await sb.from('imports').delete().eq('id', id)); },
     async deleteLead(id) { check(await sb.from('leads').delete().eq('id', id)); },
+    packages: async () => check(await sb.from('packages').select('*').order('price')),
+    async savePackage(pk) {
+      const row = { name: pk.name, price: pk.price, active: pk.active !== false };
+      if (pk.id) check(await sb.from('packages').update(row).eq('id', pk.id)); else check(await sb.from('packages').insert(row));
+    },
+    async createLead(l) {
+      const rows = check(await sb.from('leads').insert({ full_name: l.full_name, phone: l.phone || null, email: l.email || null, source: l.source || null, external_id: 'manual:' + crypto.randomUUID() }).select('id'));
+      if (!rows || !rows.length) throw err('Този телефон или имейл вече го има в CRM-а');
+      return rows[0].id;
+    },
 
     slots: (closerId, start, end, tz) => fn('slots', { closer_id: closerId, start, end, timeZone: tz }),
     book: (leadId, closerId, start, tz) => fn('book', { lead_id: leadId, closer_id: closerId, start, timeZone: tz }),
@@ -169,7 +179,7 @@ function demoBackend() {
       await wait(30); const p = me(); const L = S.L.filter(l => visible(l, p));
       const grp = (xs, f) => xs.reduce((a, x) => { const k = f(x); a[k] = (a[k] || 0) + 1; return a; }, {});
       const agg = (xs, key) => Object.values(xs.reduce((a, l) => { const k = l[key]; if (!k) return a; const x = (a[k] ||= { id: k, taken: 0, total: 0, free: 0, worked: 0, booked: 0 }); x.taken++; x.total++; if (!l.setter_id) x.free++; if (l.status !== 'new') x.worked++; if (l.status === 'booked') x.booked++; return a; }, {}));
-      return { total: L.length, free: L.filter(l => !l.setter_id).length, by_status: grp(L, l => l.status), mine_by_status: grp(L.filter(l => l.setter_id === p.id), l => l.status), setters: agg(L, 'setter_id'), imports: agg(L, 'import_id') };
+      return { total: L.length, free: L.filter(l => !l.setter_id).length, by_status: grp(L, l => l.status), mine_by_status: grp(L.filter(l => l.setter_id === p.id), l => l.status), setters: agg(L, 'setter_id'), imports: agg(L, 'import_id'), ...demoSales(L) };
     },
     async lead(id) { await wait(30); const l = S.L.find(x => x.id === id); return l && visible(l, me()) ? { ...l } : null; },
     async events(id) { await wait(30); return S.E.filter(e => e.lead_id === id).slice().reverse(); },
@@ -193,6 +203,13 @@ function demoBackend() {
       return { inserted: n, skipped: leads.length - n };
     },
     async deleteLead(id) { S.L = S.L.filter(l => l.id !== id); save(); },
+    async packages() { return (S.PK ||= [{ id: 'pk1', name: 'Стандарт', price: 1500, active: true }, { id: 'pk2', name: 'Премиум', price: 3000, active: true }]); },
+    async savePackage(pk) { S.PK ||= []; if (pk.id) Object.assign(S.PK.find(x => x.id === pk.id), pk); else S.PK.push({ ...pk, id: uid(), active: true }); save(); },
+    async createLead(l) {
+      const k = (l.phone || '').replace(/\D/g, '').slice(-9);
+      if ((k && S.L.some(x => (x.phone || '').replace(/\D/g, '').slice(-9) === k)) || (l.email && S.L.some(x => (x.email || '').toLowerCase() === l.email.toLowerCase()))) throw err('Този телефон или имейл вече го има в CRM-а');
+      const id = uid(); S.L.push({ ...l, id, status: 'new', setter_id: null, notes: '', answers: [], discount: 0, created_at: now(), updated_at: now() }); save(); return id;
+    },
     async deleteImport(id) { S.I = S.I.filter(i => i.id !== id); S.L = S.L.filter(l => l.import_id !== id); save(); },
     async slots(_c, start, end) {
       await wait(250); const data = {}; const d = new Date(start + 'T00:00:00'); const e = new Date(end + 'T00:00:00');
@@ -223,6 +240,18 @@ function demoBackend() {
       if (u.password) S.pw[p.email] = u.password; save(); return { ok: true };
     },
     resetDemo() { S = seed(); save(); location.reload(); }
+  };
+}
+
+function demoSales(L) {
+  const C = L.filter(l => l.outcome === 'closed'); const sum = (xs, f) => xs.reduce((a, x) => a + (+f(x) || 0), 0);
+  const by = (xs, k, fn) => Object.values(xs.reduce((a, l) => { const id = l[k]; if (!id) return a; fn(a[id] ||= { id }, l); return a; }, {}));
+  return {
+    sales: { booked: L.filter(l => l.status === 'booked').length, held: L.filter(l => ['closed', 'not_closed'].includes(l.outcome)).length, pending: L.filter(l => l.status === 'booked' && !l.outcome).length,
+      closed: C.length, not_closed: L.filter(l => l.outcome === 'not_closed').length, no_show: L.filter(l => l.outcome === 'no_show').length, rescheduled: L.filter(l => l.outcome === 'rescheduled').length,
+      gross: sum(C, l => l.sale_price), discount: sum(C, l => l.discount), net: sum(C, l => l.sale_price - l.discount) },
+    by_package: by(C, 'package_id', (x, l) => { x.n = (x.n || 0) + 1; x.gross = (x.gross || 0) + +l.sale_price; x.discount = (x.discount || 0) + +l.discount; x.net = (x.net || 0) + l.sale_price - l.discount; }),
+    closers: by(L.filter(l => l.status === 'booked'), 'closer_id', (x, l) => { x.booked = (x.booked || 0) + 1; if (l.outcome === 'closed') { x.closed = (x.closed || 0) + 1; x.net = (x.net || 0) + l.sale_price - l.discount; } if (l.outcome === 'no_show') x.no_show = (x.no_show || 0) + 1; })
   };
 }
 

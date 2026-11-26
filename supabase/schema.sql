@@ -322,3 +322,21 @@ begin
 end $$;
 drop trigger if exists leads_skip_dupes on public.leads;
 create trigger leads_skip_dupes before insert on public.leads for each row execute function public.leads_skip_dupes();
+
+-- ---------- продажби: пакети и резултат от срещата ----------
+-- (пуснато като миграция sales_pipeline; актуалните leads_guard, leads_log и crm_stats са в нея)
+create table if not exists public.packages (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (length(name) between 1 and 120),
+  price numeric(12,2) not null default 0 check (price >= 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.leads
+  add column if not exists source text,
+  add column if not exists outcome text check (outcome in ('closed','not_closed','no_show','rescheduled')),
+  add column if not exists package_id uuid references public.packages(id) on delete set null,
+  add column if not exists sale_price numeric(12,2) check (sale_price >= 0),
+  add column if not exists discount numeric(12,2) not null default 0 check (discount >= 0),
+  add column if not exists outcome_at timestamptz,
+  add column if not exists closer_notes text;

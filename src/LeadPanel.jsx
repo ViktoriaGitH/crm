@@ -1,7 +1,64 @@
 import { useCallback, useEffect, useState } from 'react';
 import { db } from './backend.js';
-import { Av, Badge, Icon, STATUS, fmt, fmtLong, toLocalInput, useEsc, useToast } from './ui.jsx';
+import { Av, Badge, Icon, STATUS, fmt, fmtLong, money, toLocalInput, useEsc, useToast } from './ui.jsx';
 import Booking from './Booking.jsx';
+
+const OUT = { closed: 'Затворена', not_closed: 'Не затворена', no_show: 'Не се яви', rescheduled: 'Пренасрочена' };
+
+function Outcome({ lead, onSaved }) {
+  const toast = useToast();
+  const [pk, setPk] = useState([]);
+  const [o, setO] = useState(lead.outcome || '');
+  const [f, setF] = useState({ package_id: lead.package_id || '', sale_price: lead.sale_price ?? '', discount: lead.discount || '', closer_notes: lead.closer_notes || '' });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { db.packages().then(setPk).catch(() => {}); }, []);
+  const net = (+f.sale_price || 0) - (+f.discount || 0);
+  async function save(next = o) {
+    if (next === 'closed') {
+      if (!(+f.sale_price > 0)) { toast('Въведи цена на сделката', true); return; }
+      if (+f.discount > +f.sale_price) { toast('Отстъпката е по-голяма от цената', true); return; }
+    }
+    setBusy(true);
+    try {
+      await db.update(lead.id, next === 'closed'
+        ? { outcome: 'closed', package_id: f.package_id || null, sale_price: +f.sale_price, discount: +f.discount || 0, closer_notes: f.closer_notes }
+        : { outcome: next || null, closer_notes: f.closer_notes });
+      toast(next ? `Записано: ${OUT[next]}` : 'Запазено'); onSaved();
+    } catch (e) { toast(e.message, true); }
+    setBusy(false);
+  }
+  const pick = k => { setO(k); if (k !== 'closed') save(k); };
+  return (
+    <section>
+      <p className="sec-t">Резултат от срещата</p>
+      <div className="status-grid">
+        {Object.entries(OUT).map(([k, l]) => (
+          <button key={k} className={`status-btn out-${k} ${o === k ? 'on' : ''}`} style={{ background: 'var(--surface2)' }} disabled={busy} aria-pressed={o === k} onClick={() => pick(k)}><span className="dot" /><span>{l}</span></button>
+        ))}
+      </div>
+      {o === 'closed' && (
+        <div className="sub-box" style={{ marginTop: 10 }}>
+          <label className="field">Пакет
+            <select className="input" value={f.package_id} onChange={e => { const p = pk.find(x => x.id === e.target.value); setF({ ...f, package_id: e.target.value, sale_price: p ? p.price : f.sale_price }); }}>
+              <option value="">— избери пакет —</option>
+              {pk.filter(p => p.active || p.id === f.package_id).map(p => <option key={p.id} value={p.id}>{p.name} · {money(p.price)}</option>)}
+            </select>
+            {!pk.length && <span className="faint" style={{ fontWeight: 400 }}>Още няма пакети. Админът ги добавя в „Продажби“.</span>}
+          </label>
+          <div className="map-grid">
+            <label className="field">Цена (€)<input className="input" type="number" min="0" step="1" inputMode="decimal" value={f.sale_price} onChange={e => setF({ ...f, sale_price: e.target.value })} /></label>
+            <label className="field">Отстъпка (€)<input className="input" type="number" min="0" step="1" inputMode="decimal" value={f.discount} onChange={e => setF({ ...f, discount: e.target.value })} /></label>
+          </div>
+          <b>Платено: {money(net)}</b>
+        </div>
+      )}
+      <label className="field" style={{ marginTop: 10 }}>Бележки от срещата
+        <textarea className="input" rows={3} value={f.closer_notes} onChange={e => setF({ ...f, closer_notes: e.target.value })} placeholder="Възражения, какво реши, разсрочено плащане…" maxLength={5000} />
+      </label>
+      <button className="btn primary" style={{ marginTop: 8 }} disabled={busy} onClick={() => save()}>{busy ? 'Запазвам…' : 'Запази резултата'}</button>
+    </section>
+  );
+}
 
 const ACTIONS = [
   ['answered', 'Вдигна'],
@@ -17,10 +74,11 @@ const EV = {
   assigned: () => 'прехвърли лийда',
   booked: (d) => `записа разговор за ${fmt(d.call_at)}`,
   note: (d) => `бележка: „${d.text}“`,
+  outcome: (d) => d.outcome ? `резултат: ${OUT[d.outcome] || d.outcome}${d.sale_price ? ` · ${money(d.sale_price - (d.discount || 0))}` : ''}` : 'изчисти резултата',
   status: (d) => d.to === 'follow_up' ? `фолоу ъп за ${fmt(d.follow_up_at)}` : `статус: ${STATUS[d.to] || d.to}`
 };
 
-export default function LeadPanel({ id, me, profiles, imports, onClose, onChanged }) {
+export default function LeadPanel({ id, me, profiles, imports, onClose, onChanged, page }) {
   const toast = useToast();
   const [lead, setLead] = useState(undefined);
   const [events, setEvents] = useState([]);
@@ -40,7 +98,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
     } catch { setLead(null); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, []);
+  useEffect(() => { if (page) { window.scrollTo(0, 0); return; } document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, [page]);
 
   const isAdmin = me.role === 'admin';
   const mine = lead && lead.setter_id === me.id;
@@ -106,17 +164,18 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
 
   return (
     <>
-      <div className="overlay" onClick={onClose} />
-      <aside className="panel" role="dialog" aria-modal="true" aria-label={lead?.full_name || 'Лийд'}>
+      {!page && <div className="overlay" onClick={onClose} />}
+      <aside className={page ? 'panel page' : 'panel'} role={page ? 'main' : 'dialog'} aria-modal={page ? undefined : true} aria-label={lead?.full_name || 'Лийд'}>
+        {page && <button className="btn ghost sm back" onClick={onClose}>‹ Назад към лийдовете</button>}
         <div className="panel-head">
           <div className="grow">
             <h2>{lead === undefined ? 'Зареждам…' : lead ? lead.full_name : 'Лийдът не е намерен'}</h2>
             {lead && <div className="row" style={{ marginTop: 8, gap: 8 }}>
               <Badge status={lead.status} />
-              {imports[lead.import_id] && <span className="faint" style={{ fontSize: 13 }}>{imports[lead.import_id].name}</span>}
+              {(lead.source || imports[lead.import_id]) && <span className="faint" style={{ fontSize: 13 }}>Източник: {lead.source || imports[lead.import_id].name}</span>}
             </div>}
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Затвори"><Icon name="x" /></button>
+          {!page && <button className="icon-btn" onClick={onClose} aria-label="Затвори"><Icon name="x" /></button>}
         </div>
 
         {lead === null && <div className="panel-body"><p className="muted">Възможно е друг сетър да го е взел или да нямаш достъп до него.</p></div>}
@@ -144,6 +203,8 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
                 <b>{fmtLong(lead.follow_up_at)}</b>
               </div>
             )}
+
+            {lead.status === 'booked' && (isAdmin || lead.closer_id === me.id) && <Outcome lead={lead} onSaved={() => { load(); onChanged?.(); }} />}
 
             <section>
               <p className="sec-t">Контакт</p>

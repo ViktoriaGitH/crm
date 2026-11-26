@@ -5,6 +5,7 @@ import LeadsPage from './LeadsPage.jsx';
 import ImportPage from './ImportPage.jsx';
 import TeamPage from './TeamPage.jsx';
 import HomePage from './HomePage.jsx';
+import SalesPage from './SalesPage.jsx';
 
 function useHash() {
   const get = () => (location.hash.replace(/^#\/?/, '') || '').split('/');
@@ -26,9 +27,9 @@ function useTheme() {
 }
 
 const NAV = {
-  admin: [['home', 'Табло', 'home'], ['leads', 'Лийдове', 'leads'], ['followups', 'Фолоу ъпи', 'clock'], ['calls', 'Разговори', 'cal'], ['import', 'Импорт', 'upload'], ['team', 'Екип', 'team']],
+  admin: [['home', 'Табло', 'home'], ['leads', 'Лийдове', 'leads'], ['followups', 'Фолоу ъпи', 'clock'], ['calls', 'Срещи', 'cal'], ['sales', 'Продажби', 'chart'], ['import', 'Импорт', 'upload'], ['team', 'Екип', 'team']],
   setter: [['home', 'Табло', 'home'], ['leads', 'Лийдове', 'leads'], ['followups', 'Фолоу ъпи', 'clock'], ['calls', 'Разговори', 'cal']],
-  closer: [['calls', 'Разговори', 'cal']]
+  closer: [['calls', 'Срещи', 'cal']]
 };
 
 export default function App() {
@@ -150,6 +151,7 @@ function Shell({ me, theme, toggleTheme }) {
           {['leads', 'followups', 'calls'].includes(current) && <LeadsPage key={current} me={me} view={current} openId={param} onChanged={refreshCounts} />}
           {current === 'import' && <ImportPage me={me} />}
           {current === 'team' && <TeamPage me={me} />}
+          {current === 'sales' && <SalesPage />}
         </main>
       </div>
       <nav className="bottom-nav" aria-label="Меню">{nav.map(link)}</nav>

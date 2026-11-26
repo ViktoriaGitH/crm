@@ -67,6 +67,10 @@ function supabaseBackend() {
     async claim(id) { return check(await sb.rpc('claim_lead', { p_lead: id })); },
     async release(id) { return check(await sb.rpc('release_lead', { p_lead: id })); },
     async assign(id, setterId) { check(await sb.rpc('assign_lead', { p_lead: id, p_setter: setterId || null })); },
+    async bookManual(id, callAt, closerId) {
+      const ok = check(await sb.rpc('book_manual', { p_lead: id, p_call_at: new Date(callAt).toISOString(), p_closer: closerId }));
+      if (!ok) throw err('Не можах да запиша — лийдът не е твой');
+    },
     async update(id, patch) {
       const rows = check(await sb.from('leads').update(patch).eq('id', id).select('id'));
       if (!rows || !rows.length) throw err('Нямаш права да променяш този лийд');
@@ -185,6 +189,7 @@ function demoBackend() {
     async events(id) { await wait(30); return S.E.filter(e => e.lead_id === id).slice().reverse(); },
     async claim(id) { await wait(); const l = S.L.find(x => x.id === id); if (!l || l.setter_id) return false; l.setter_id = S.session; l.claimed_at = now(); log(id, 'claimed'); save(); return true; },
     async release(id) { await wait(); const l = S.L.find(x => x.id === id); if (!l || l.status === 'booked' || (l.setter_id !== S.session && me().role !== 'admin')) return false; l.setter_id = null; log(id, 'released'); save(); return true; },
+    async bookManual(id, callAt, closerId) { const l = S.L.find(x => x.id === id); Object.assign(l, { status: 'booked', call_at: new Date(callAt).toISOString(), closer_id: closerId, follow_up_at: null, outcome: null, setter_id: l.setter_id || S.session }); log(id, 'booked', { call_at: l.call_at, closer_id: closerId }); save(); },
     async assign(id, setterId) { const l = S.L.find(x => x.id === id); l.setter_id = setterId || null; log(id, 'assigned', { setter_id: setterId }); save(); },
     async update(id, patch) {
       await wait(); const l = S.L.find(x => x.id === id); const p = me();

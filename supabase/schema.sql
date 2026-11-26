@@ -340,3 +340,25 @@ alter table public.leads
   add column if not exists discount numeric(12,2) not null default 0 check (discount >= 0),
   add column if not exists outcome_at timestamptz,
   add column if not exists closer_notes text;
+
+-- записване на разговор ръчно (без Cal.com): дата, час и клоузър
+create or replace function public.book_manual(p_lead uuid, p_call_at timestamptz, p_closer uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare ok boolean;
+begin
+  if public.my_role() not in ('setter', 'admin') then raise exception 'not allowed'; end if;
+  if p_call_at is null or p_call_at < now() - interval '1 day' or p_call_at > now() + interval '1 year' then raise exception 'invalid time'; end if;
+  if not exists (select 1 from public.profiles where id = p_closer and active and role in ('closer', 'admin')) then raise exception 'invalid closer'; end if;
+  perform set_config('crm.trusted', 'on', true);
+  update public.leads set status = 'booked', call_at = p_call_at, closer_id = p_closer, follow_up_at = null,
+         outcome = null, setter_id = coalesce(setter_id, auth.uid()), claimed_at = coalesce(claimed_at, now())
+   where id = p_lead and (setter_id = auth.uid() or public.is_admin() or (setter_id is null and public.my_role() = 'setter'));
+  ok := found;
+  perform set_config('crm.trusted', 'off', true);
+  if ok then
+    insert into public.lead_events (lead_id, user_id, type, data) values (p_lead, auth.uid(), 'booked', jsonb_build_object('call_at', p_call_at, 'closer_id', p_closer));
+  end if;
+  return ok;
+end $$;
+revoke execute on function public.book_manual(uuid, timestamptz, uuid) from public, anon;
+grant execute on function public.book_manual(uuid, timestamptz, uuid) to authenticated;

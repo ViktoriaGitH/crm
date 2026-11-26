@@ -104,7 +104,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
   }
 
   const claimBtn = (r, cls = '') => !r.setter_id && r.status !== 'booked' && me.role !== 'closer'
-    ? <button className={`btn primary sm ${cls}`} disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам · звъня</button> : null;
+    ? <button className={`btn primary sm ${cls}`} disabled={busyId === r.id} onClick={e => quickClaim(e, r)}>Взимам лийда</button> : null;
 
   return (
     <>

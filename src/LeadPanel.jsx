@@ -1,7 +1,35 @@
 import { useCallback, useEffect, useState } from 'react';
 import { db } from './backend.js';
 import { Av, Badge, Icon, STATUS, fmt, fmtLong, money, toLocalInput, useEsc, useToast } from './ui.jsx';
-import Booking from './Booking.jsx';
+
+function ManualBooking({ lead, profiles, onDone }) {
+  const toast = useToast();
+  const closers = profiles.filter(p => p.active && (p.role === 'closer' || p.role === 'admin'))
+    .sort((a, b) => (b.role === 'closer') - (a.role === 'closer') || !!b.cal_link - !!a.cal_link);
+  const [closerId, setCloserId] = useState(lead.closer_id || closers[0]?.id || '');
+  const [at, setAt] = useState(() => {
+    if (lead.call_at) return toLocalInput(new Date(lead.call_at));
+    const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(11, 0, 0, 0); return toLocalInput(d);
+  });
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    if (!at || !closerId) { toast('Избери дата, час и клоузър', true); return; }
+    if (new Date(at) < new Date(Date.now() - 864e5)) { toast('Датата е в миналото', true); return; }
+    setBusy(true);
+    try { await db.bookManual(lead.id, at, closerId); toast(`Записан разговор: ${fmtLong(new Date(at))}`); onDone(); }
+    catch (e) { toast(e.message, true); setBusy(false); }
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <b>Кога е разговорът?</b>
+      <input className="input" type="datetime-local" value={at} onChange={e => setAt(e.target.value)} aria-label="Дата и час на разговора" />
+      {closers.length > 1
+        ? <label className="field">С кого<select className="input" value={closerId} onChange={e => setCloserId(e.target.value)}>{closers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label>
+        : closers[0] && <span className="muted" style={{ fontSize: 14 }}>с {closers[0].full_name}</span>}
+      <button className="btn primary big" disabled={busy} onClick={save}>{busy ? 'Записвам…' : 'Запиши разговора'}</button>
+    </div>
+  );
+}
 
 const OUT = { closed: 'Затворена', not_closed: 'Не затворена', no_show: 'Не се яви', rescheduled: 'Пренасрочена' };
 
@@ -195,6 +223,9 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
                 <span className="faint" style={{ fontSize: 13, fontWeight: 600 }}>ЗАПИСАН РАЗГОВОР</span>
                 <b>{fmtLong(lead.call_at)}</b>
                 {closer && <span className="muted" style={{ fontSize: 14 }}>с {closer.full_name}</span>}
+                {(isAdmin || lead.setter_id === me.id) && (mode === 'rebook'
+                  ? <div className="sub-box" style={{ marginTop: 8 }}><ManualBooking lead={lead} profiles={profiles} onDone={() => { setMode(null); load(); onChanged?.(); }} /></div>
+                  : <button className="btn ghost sm" style={{ alignSelf: 'flex-start', marginTop: 6 }} onClick={() => setMode('rebook')}>Смени часа</button>)}
               </div>
             )}
             {lead.status === 'follow_up' && lead.follow_up_at && (
@@ -263,7 +294,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
                 )}
                 {mode === 'booked' && (
                   <div className="sub-box" style={{ marginTop: 10 }}>
-                    <Booking lead={lead} profiles={profiles} onBooked={() => { setMode(null); load(); onChanged?.(); }} />
+                    <ManualBooking lead={lead} profiles={profiles} onDone={() => { setMode(null); load(); onChanged?.(); }} />
                   </div>
                 )}
               </section>

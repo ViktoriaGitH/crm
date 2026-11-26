@@ -52,6 +52,8 @@ export default function TeamPage({ me }) {
         })}
       </div>
 
+      <CalSync />
+
       {edit && <UserForm user={edit} me={me} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
     </>
   );
@@ -116,5 +118,55 @@ function UserForm({ user, me, onClose, onSaved }) {
         <div className="row"><button className="btn primary grow" disabled={busy}>{busy ? 'Запазвам…' : isNew ? 'Създай акаунта' : 'Запази'}</button><button type="button" className="btn" onClick={onClose}>Отказ</button></div>
       </form>
     </Modal>
+  );
+}
+
+function CalSync() {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [needKey, setNeedKey] = useState(false);
+  const [key, setKey] = useState('');
+  const [res, setRes] = useState(null);
+  const [err, setErr] = useState('');
+  async function sync() {
+    setBusy(true); setErr('');
+    try { const r = await db.calSync(); setRes(r); toast(`Отбелязани ${r.marked + r.updated} лийда`); }
+    catch (e) { if (e.code === 'no_key') setNeedKey(true); else setErr(e.message); }
+    setBusy(false);
+  }
+  async function saveKey(e) {
+    e.preventDefault(); setBusy(true); setErr('');
+    try { await db.calKey(key); setKey(''); setNeedKey(false); setBusy(false); return sync(); }
+    catch (x) { setErr(x.message); }
+    setBusy(false);
+  }
+  const fmtD = s => new Intl.DateTimeFormat('bg-BG', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(s));
+  return (
+    <div className="card box" style={{ marginTop: 16 }}>
+      <div className="row"><div className="grow"><b>Синхронизация с Cal.com</b><div className="faint" style={{ fontSize: 13 }}>Намира разговорите, записани в Cal.com, и по телефон или имейл отбелязва лийдовете като „Записан разговор“ с датата и часа им.</div></div>
+        <button className="btn primary" disabled={busy} onClick={sync}>{busy ? 'Синхронизирам…' : 'Синхронизирай'}</button></div>
+      {(needKey) && (
+        <form onSubmit={saveKey} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          <span style={{ fontSize: 14 }}>Трябва Cal.com API ключ (веднъж): Cal.com → Settings → Developer → API Keys → „New“ → копирай ключа (започва с <code>cal_live_</code>). Пази се само на сървъра.</span>
+          <div className="row" style={{ flexWrap: 'nowrap' }}><input className="input" type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} placeholder="cal_live_…" required /><button className="btn primary" disabled={busy}>Запази</button></div>
+        </form>
+      )}
+      {err && <div className="err" style={{ marginTop: 10 }}>{err}</div>}
+      {res && (
+        <div style={{ marginTop: 12 }}>
+          <div className="stats">
+            <div className="stat"><b>{res.total}</b><span>разговора в Cal.com</span></div>
+            <div className="stat"><b>{res.marked}</b><span>нови отбелязани</span></div>
+            <div className="stat"><b>{res.updated}</b><span>с обновен час</span></div>
+            <div className="stat"><b>{res.same}</b><span>вече бяха точни</span></div>
+          </div>
+          {res.unmatched_count > 0 && (
+            <details style={{ marginTop: 10 }}><summary className="muted" style={{ cursor: 'pointer', fontSize: 14 }}>{res.unmatched_count} разговора без лийд в CRM-а (друг телефон/имейл или не са от уебинара)</summary>
+              <div style={{ fontSize: 13, marginTop: 6 }}>{res.unmatched.map((u, i) => <div key={i} className="faint">{fmtD(u.start)} · {u.name || '—'} {u.email && `· ${u.email}`} {u.phone && `· тел. ${u.phone}`}</div>)}</div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

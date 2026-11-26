@@ -1,5 +1,5 @@
 // Сървърна част на CRM-а (Supabase Edge Function).
-// Действия: status, setup (първи админ), create_user, update_user, slots, book
+// Действия: status, setup (първи админ), create_user, update_user, slots, book, cal_key, cal_sync
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CAL_API = 'https://api.cal.com/v2';
@@ -172,6 +172,80 @@ Deno.serve(async (req) => {
       if (error) throw error;
       await sb.from('lead_events').insert({ lead_id: lead.id, user_id: me.id, type: 'booked', data: { call_at, closer_id: closer.id } });
       return json({ ok: true, call_at, closer_id: closer.id });
+    }
+
+    if (action === 'cal_key') {
+      if (me.role !== 'admin') fail(403, 'Само админ');
+      const key = String(b.key || '').trim();
+      if (!/^cal_(live|test)_\S{10,}$/.test(key)) fail(400, 'Това не прилича на Cal.com API ключ (започва с cal_live_…)');
+      const t = await fetch(`${CAL_API}/me`, { headers: { Authorization: `Bearer ${key}`, 'cal-api-version': '2024-08-13' } });
+      if (!t.ok) fail(400, 'Cal.com не прие ключа — провери дали е копиран целият');
+      const { error } = await sb.from('crm_secrets').upsert({ key: 'cal_api_key', value: key });
+      if (error) throw error;
+      return json({ ok: true });
+    }
+
+    if (action === 'cal_sync') {
+      if (me.role !== 'admin') fail(403, 'Само админ');
+      const { data: sec } = await sb.from('crm_secrets').select('value').eq('key', 'cal_api_key').maybeSingle();
+      const key = Deno.env.get('CAL_API_KEY') || sec?.value;
+      if (!key) fail(400, 'Първо добави Cal.com API ключ', 'no_key');
+      const H = { Authorization: `Bearer ${key}`, 'cal-api-version': '2024-08-13' };
+      const all: any[] = [];
+      for (const status of ['upcoming', 'past', 'unconfirmed']) {
+        for (let skip = 0; skip < 5000; skip += 100) {
+          const r = await fetch(`${CAL_API}/bookings?` + new URLSearchParams({ status, take: '100', skip: String(skip) }), { headers: H });
+          if (!r.ok) { console.error('cal list', r.status, (await r.text()).slice(0, 500)); fail(502, 'Cal.com не върна разговорите'); }
+          const j = await r.json(); const d = Array.isArray(j?.data) ? j.data : [];
+          all.push(...d); if (d.length < 100) break;
+        }
+      }
+      const digits = (v: unknown) => String(v || '').replace(/\D/g, '');
+      const tail = (v: unknown) => { const d = digits(v); return d.length >= 8 ? d.slice(-9) : ''; };
+      const { data: profs } = await sb.from('profiles').select('id, cal_link, role, active');
+      const closers = (profs || []).filter(p => p.active && parseCalLink(p.cal_link));
+      const closerFor = (bk: any) => {
+        const u = String(bk?.hosts?.[0]?.username || '').toLowerCase();
+        return (closers.find(c => parseCalLink(c.cal_link)!.username.toLowerCase() === u) || closers[0])?.id || null;
+      };
+      const leads: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb.from('leads').select('id, phone, email, status, call_at, booking_uid').range(from, from + 999);
+        if (error) throw error; leads.push(...(data || [])); if (!data || data.length < 1000) break;
+      }
+      const byPhone = new Map<string, any>(), byEmail = new Map<string, any>(), byUid = new Map<string, any>();
+      for (const l of leads) {
+        const t = tail(l.phone); if (t) byPhone.set(t, l);
+        if (l.email) byEmail.set(String(l.email).toLowerCase(), l);
+        if (l.booking_uid) byUid.set(l.booking_uid, l);
+      }
+      // най-новият активен разговор за всеки лийд
+      const best = new Map<string, { l: any; bk: any }>();
+      const unmatched: { name: string; start: string; phone: string; email: string }[] = [];
+      for (const bk of all) {
+        if (/cancel|reject/i.test(String(bk.status || ''))) continue;
+        const att = (bk.attendees || [])[0] || {};
+        const f = bk.bookingFieldsResponses || {};
+        const phones = [att.phoneNumber, f.attendeePhoneNumber, f.phone, f.phoneNumber, f.location?.value, typeof f.location === 'string' ? f.location : null, bk.location]
+          .map(tail).filter(Boolean);
+        const emails = [att.email, f.email].filter(Boolean).map((e: string) => e.toLowerCase());
+        const meta = bk.metadata?.lead_id;
+        const l = byUid.get(bk.uid) || (meta && leads.find(x => String(x.id) === String(meta)))
+          || phones.map(p => byPhone.get(p)).find(Boolean) || emails.map(e => byEmail.get(e)).find(Boolean);
+        if (!l) { unmatched.push({ name: att.name || f.name || '', start: bk.start, phone: phones[0] ? '…' + phones[0].slice(-4) : '', email: emails[0] || '' }); continue; }
+        const prev = best.get(l.id);
+        if (!prev || new Date(bk.start) > new Date(prev.bk.start)) best.set(l.id, { l, bk });
+      }
+      let marked = 0, updated = 0, same = 0;
+      for (const { l, bk } of best.values()) {
+        if (l.status === 'booked' && l.booking_uid === bk.uid && l.call_at && +new Date(l.call_at) === +new Date(bk.start)) { same++; continue; }
+        const { error } = await sb.from('leads').update({ status: 'booked', call_at: bk.start, booking_uid: bk.uid, closer_id: closerFor(bk), follow_up_at: null }).eq('id', l.id);
+        if (error) throw error;
+        await sb.from('lead_events').insert({ lead_id: l.id, user_id: me.id, type: 'booked', data: { call_at: bk.start, source: 'cal_sync' } });
+        if (l.status === 'booked') updated++; else marked++;
+      }
+      unmatched.sort((a, c) => String(c.start).localeCompare(String(a.start)));
+      return json({ ok: true, total: all.length, marked, updated, same, unmatched: unmatched.slice(0, 200), unmatched_count: unmatched.length });
     }
 
     fail(400, 'Непознато действие');

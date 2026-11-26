@@ -299,3 +299,8 @@ grant usage, select on all sequences in schema public to authenticated;
 
 -- анонимни посетители нямат достъп до нищо
 revoke all on public.profiles, public.imports, public.leads, public.lead_events from anon;
+
+-- тайни на сървъра (Cal.com API ключ); само Edge Function с service role ги вижда
+create table if not exists public.crm_secrets (key text primary key, value text not null, updated_at timestamptz not null default now());
+alter table public.crm_secrets enable row level security;
+revoke all on public.crm_secrets from anon, authenticated;

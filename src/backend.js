@@ -92,6 +92,8 @@ function supabaseBackend() {
     slots: (closerId, start, end, tz) => fn('slots', { closer_id: closerId, start, end, timeZone: tz }),
     book: (leadId, closerId, start, tz) => fn('book', { lead_id: leadId, closer_id: closerId, start, timeZone: tz }),
     createUser: (u) => fn('create_user', u),
+    calKey: (key) => fn('cal_key', { key }),
+    calSync: () => fn('cal_sync'),
     updateUser: (u) => fn('update_user', u),
     async needsSetup() { try { return !!(await fn('status')).needs_setup; } catch { return false; } },
     async setup(u) { await fn('setup', u); await this.signIn(u.email, u.password); }
@@ -206,6 +208,8 @@ function demoBackend() {
       Object.assign(l, { status: 'booked', call_at: start, closer_id: closerId, follow_up_at: null, updated_at: now() });
       log(leadId, 'booked', { call_at: start, closer_id: closerId }); save(); return { ok: true, call_at: start };
     },
+    async calKey() { return { ok: true }; },
+    async calSync() { return { ok: true, total: 0, marked: 0, updated: 0, same: 0, unmatched: [], unmatched_count: 0 }; },
     async createUser(u) {
       await wait(); if (S.P.some(p => p.email === u.email.toLowerCase())) throw err('Вече има акаунт с този имейл');
       if ((u.password || '').length < 8) throw err('Паролата трябва да е поне 8 символа');

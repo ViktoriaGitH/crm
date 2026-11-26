@@ -244,9 +244,8 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
                 <div className="contact-row">
                   <span className="lbl">Телефон</span>
                   {showPhone ? <>
-                    <span className="val">{lead.phone || '—'}</span>
-                    {lead.phone && <a className="btn primary sm" href={`tel:${lead.phone}`}><Icon name="phone" size={15} />Звънни</a>}
-                    {lead.phone && <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => copy(lead.phone)} aria-label="Копирай телефона"><Icon name="copy" size={15} /></button>}
+                    <span className="val" style={{ userSelect: 'all' }}>{lead.phone || '—'}</span>
+                    {lead.phone && <button className="btn primary sm" onClick={() => copy(lead.phone)}><Icon name="copy" size={15} />Копирай номера</button>}
                   </> : <span className="val masked">{lead.phone ? lead.phone.slice(0, -6) + ' ••• •••' : '—'}</span>}
                 </div>
                 <div className="contact-row">

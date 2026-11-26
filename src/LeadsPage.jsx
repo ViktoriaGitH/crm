@@ -152,7 +152,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
                         <div className="k-top"><b>{r.full_name}</b>
                           {person ? <span className="k-av" title={person.full_name}>{initials2(person.full_name)}</span> : wait && <span className="k-wait">чака {wait}</span>}</div>
                         <span className="k-contact">{maskPhone(r, me)}{r.email ? ' · ' + r.email : ''}</span>
-                        {when && <span className={`when ${relWhen(when).cls}`}>{st === 'follow_up' ? 'Звънни: ' : 'Среща: '}{relWhen(when).text}</span>}
+                        {when && <span className={`when ${relWhen(when).cls}`}>{st === 'follow_up' ? 'Обади се: ' : 'Среща: '}{relWhen(when).text}</span>}
                         {r.outcome === 'closed' && <span className="k-money">{money(r.sale_price - (r.discount || 0))}{+r.discount ? <s> {money(r.sale_price)}</s> : null}</span>}
                         {src && <span className="k-src"><span>Източник</span><b>{src}</b></span>}
                         {claimBtn(r, 'k-claim')}
@@ -207,7 +207,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
               return (
                 <div key={r.id} className="lcard" role="button" tabIndex={0} onClick={() => open(r.id)} onKeyDown={e => { if (e.key === 'Enter') open(r.id); }}>
                   <div className="top-line"><b>{r.full_name}</b><Badge status={r.status} /></div>
-                  {w && <span className={`when ${w.cls}`}>{view === 'calls' ? 'Разговор: ' : 'Звънни: '}{w.text}</span>}
+                  {w && <span className={`when ${w.cls}`}>{view === 'calls' ? 'Разговор: ' : 'Обади се: '}{w.text}</span>}
                   <div className="meta">
                     <span>{maskPhone(r, me)}{impById[r.import_id] ? ' · ' + impById[r.import_id].name : ''}</span>
                     {!r.setter_id && me.role !== 'closer'

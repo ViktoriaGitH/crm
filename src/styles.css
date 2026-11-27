@@ -401,3 +401,11 @@ textarea.input { resize: vertical; line-height: 1.5; }
 *::-webkit-scrollbar-corner { background: transparent; }
 [data-theme="light"] * { scrollbar-color: rgba(11, 11, 12, .2) transparent; }
 [data-theme="light"] *::-webkit-scrollbar-thumb { background: rgba(11, 11, 12, .18); }
+
+.st-disqualified { color: var(--danger); background: var(--danger-bg); }
+.col.st-disqualified { --st: var(--danger); }
+.status-btn.st-disqualified .dot { background: var(--danger); }
+.board { grid-auto-columns: minmax(104px, 1fr); }
+.board .col-head b { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.board .col-head { gap: 5px; padding: 9px 7px; } .board .col-head b { font-size: 11.5px; overflow-wrap: normal; word-break: normal; }
+.board .col-head .cnt { border: none; padding: 0; min-width: 0; font-size: 11px; }

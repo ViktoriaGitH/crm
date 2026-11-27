@@ -140,7 +140,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
             const list = (rows || []).filter(view === 'calls' ? r => closerStage(r) === st : r => setterCol(r) === st);
             return (
               <div key={st} className={`col st-${st}`}>
-                <div className="col-head"><span className="dot" /><b>{view === 'calls' ? STAGE[st] : COL_LABEL[st] || STATUS[st]}</b><span className="cnt">{rows ? list.length : '…'}</span></div>
+                <div className="col-head"><span className="dot" /><b title={view === 'calls' ? STAGE[st] : STATUS[st] || COL_LABEL[st]}>{view === 'calls' ? STAGE[st] : COL_LABEL[st] || STATUS[st]}</b><span className="cnt">{rows ? list.length : '…'}</span></div>
                 <div className="col-body">
                   {rows === null ? <div className="loading-row" /> : list.length === 0 ? <div className="col-empty">—</div> : list.map(r => {
                     const person = byId[r.setter_id];
@@ -257,10 +257,10 @@ function NewLead({ onClose, onDone }) {
   );
 }
 
-const BOARD = ['new', 'answered', 'no_answer', 'wrong_number', 'follow_up', 'booked', 'closed', 'not_closed'];
+const BOARD = ['new', 'answered', 'no_answer', 'wrong_number', 'disqualified', 'follow_up', 'booked', 'closed', 'not_closed'];
 // записаните се разпределят според резултата от срещата
 const setterCol = r => r.status !== 'booked' ? r.status : r.outcome === 'closed' ? 'closed' : (r.outcome === 'not_closed' || r.outcome === 'no_show') ? 'not_closed' : 'booked';
-const COL_LABEL = { booked: 'Записан', closed: 'Затворена', not_closed: 'Не затворена' };
+const COL_LABEL = { booked: 'Записан', closed: 'Затворена', not_closed: 'Не затворена', disqualified: 'Неквалиф.' };
 const initials2 = n => String(n || '').split(/\s+/).map(w => (w.match(/\p{L}/u) || [''])[0]).join('').slice(0, 2).toUpperCase();
 function waited(t) {
   const h = (Date.now() - new Date(t)) / 36e5;

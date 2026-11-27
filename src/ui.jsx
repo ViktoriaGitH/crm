@@ -5,6 +5,7 @@ export const STATUS = {
   answered: 'Вдигна',
   no_answer: 'Не вдигна',
   wrong_number: 'Грешен номер',
+  disqualified: 'Неквалифициран',
   booked: 'Записан разговор',
   follow_up: 'Фолоу ъп'
 };

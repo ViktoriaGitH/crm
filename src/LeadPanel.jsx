@@ -92,6 +92,7 @@ const ACTIONS = [
   ['answered', 'Вдигна'],
   ['no_answer', 'Не вдигна'],
   ['wrong_number', 'Грешен номер'],
+  ['disqualified', 'Неквалифициран'],
   ['follow_up', 'Фолоу ъп'],
   ['booked', 'Записан разговор']
 ];
@@ -277,7 +278,7 @@ export default function LeadPanel({ id, me, profiles, imports, onClose, onChange
                   {lead.status !== 'new' && <button className="btn ghost sm" disabled={busy} onClick={() => { setMode(null); setStatus('new'); }}>Махни статуса</button>}</div>
                 <div className="status-grid">
                   {ACTIONS.map(([k, label]) => (
-                    <button key={k} className={`status-btn st-${k} ${lead.status === k || mode === k ? 'on' : ''} ${k === 'booked' ? 'wide' : ''}`}
+                    <button key={k} className={`status-btn st-${k} ${lead.status === k || mode === k ? 'on' : ''}`}
                       style={{ background: 'var(--surface2)' }} disabled={busy} aria-pressed={lead.status === k} onClick={() => pick(k)}>
                       <span className="dot" /><span>{label}</span><span className="kbd" aria-hidden="true">{ACTIONS.findIndex(a => a[0] === k) + 1}</span>
                     </button>

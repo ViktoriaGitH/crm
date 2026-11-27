@@ -11,7 +11,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type public.lead_status as enum ('new', 'answered', 'no_answer', 'wrong_number', 'booked', 'follow_up');
+  create type public.lead_status as enum ('new', 'answered', 'no_answer', 'wrong_number', 'disqualified', 'booked', 'follow_up');
 exception when duplicate_object then null; end $$;
 
 -- ---------- таблици ----------

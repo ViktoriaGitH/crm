@@ -409,3 +409,5 @@ textarea.input { resize: vertical; line-height: 1.5; }
 .board .col-head b { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
 .board .col-head { gap: 5px; padding: 9px 7px; } .board .col-head b { font-size: 11.5px; overflow-wrap: normal; word-break: normal; }
 .board .col-head .cnt { border: none; padding: 0; min-width: 0; font-size: 11px; }
+.out-disqualified { --st: var(--danger); } .status-btn.out-disqualified { color: var(--danger); }
+.col.st-disqualified .col-head b { color: var(--danger); }

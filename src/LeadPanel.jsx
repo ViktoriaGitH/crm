@@ -31,7 +31,7 @@ function ManualBooking({ lead, profiles, onDone }) {
   );
 }
 
-const OUT = { closed: 'Затворена', not_closed: 'Не затворена', no_show: 'Не се яви', rescheduled: 'Пренасрочена' };
+const OUT = { closed: 'Затворена', not_closed: 'Не затворена', no_show: 'Не се яви', rescheduled: 'Пренасрочена', disqualified: 'Неквалифициран' };
 
 function Outcome({ lead, onSaved }) {
   const toast = useToast();
@@ -55,7 +55,15 @@ function Outcome({ lead, onSaved }) {
     } catch (e) { toast(e.message, true); }
     setBusy(false);
   }
-  const pick = k => { setO(k); if (k !== 'closed') save(k); };
+  const [reAt, setReAt] = useState(() => { const d = lead.call_at && new Date(lead.call_at) > new Date() ? new Date(lead.call_at) : (() => { const x = new Date(); x.setDate(x.getDate() + 1); x.setHours(11, 0, 0, 0); return x; })(); return toLocalInput(d); });
+  async function reschedule() {
+    if (!reAt || new Date(reAt) < new Date(Date.now() - 36e5)) { toast('Избери бъдеща дата и час', true); return; }
+    setBusy(true);
+    try { await db.reschedule(lead.id, reAt); toast(`Пренасрочена за ${fmtLong(new Date(reAt))}`); onSaved(); }
+    catch (e) { toast(e.message, true); }
+    setBusy(false);
+  }
+  const pick = k => { setO(k); if (k !== 'closed' && k !== 'rescheduled') save(k); };
   return (
     <section>
       <p className="sec-t">Резултат от срещата</p>
@@ -64,6 +72,13 @@ function Outcome({ lead, onSaved }) {
           <button key={k} className={`status-btn out-${k} ${o === k ? 'on' : ''}`} style={{ background: 'var(--surface2)' }} disabled={busy} aria-pressed={o === k} onClick={() => pick(k)}><span className="dot" /><span>{l}</span></button>
         ))}
       </div>
+      {o === 'rescheduled' && (
+        <div className="sub-box" style={{ marginTop: 10 }}>
+          <b>Нова дата и час на срещата</b>
+          <input className="input" type="datetime-local" value={reAt} onChange={e => setReAt(e.target.value)} aria-label="Нова дата и час" />
+          <button className="btn primary" disabled={busy} onClick={reschedule}>{busy ? 'Записвам…' : 'Пренасрочи'}</button>
+        </div>
+      )}
       {o === 'closed' && (
         <div className="sub-box" style={{ marginTop: 10 }}>
           <label className="field">Пакет
@@ -102,6 +117,7 @@ const EV = {
   released: () => 'освободи лийда',
   assigned: () => 'прехвърли лийда',
   booked: (d) => `записа разговор за ${fmt(d.call_at)}`,
+  rescheduled: (d) => `пренасрочи срещата за ${fmt(d.call_at)}`,
   note: (d) => `бележка: „${d.text}“`,
   outcome: (d) => d.outcome ? `резултат: ${OUT[d.outcome] || d.outcome}${d.sale_price ? ` · ${money(d.sale_price - (d.discount || 0))}` : ''}` : 'изчисти резултата',
   status: (d) => d.to === 'follow_up' ? `фолоу ъп за ${fmt(d.follow_up_at)}` : `статус: ${STATUS[d.to] || d.to}`

@@ -67,6 +67,10 @@ function supabaseBackend() {
     async claim(id) { return check(await sb.rpc('claim_lead', { p_lead: id })); },
     async release(id) { return check(await sb.rpc('release_lead', { p_lead: id })); },
     async assign(id, setterId) { check(await sb.rpc('assign_lead', { p_lead: id, p_setter: setterId || null })); },
+    async reschedule(id, at) {
+      const ok = check(await sb.rpc('reschedule_call', { p_lead: id, p_call_at: new Date(at).toISOString() }));
+      if (!ok) throw err('Не можах да пренасроча срещата');
+    },
     async bookManual(id, callAt, closerId) {
       const ok = check(await sb.rpc('book_manual', { p_lead: id, p_call_at: new Date(callAt).toISOString(), p_closer: closerId }));
       if (!ok) throw err('Не можах да запиша — лийдът не е твой');
@@ -189,6 +193,7 @@ function demoBackend() {
     async events(id) { await wait(30); return S.E.filter(e => e.lead_id === id).slice().reverse(); },
     async claim(id) { await wait(); const l = S.L.find(x => x.id === id); if (!l || l.setter_id) return false; l.setter_id = S.session; l.claimed_at = now(); log(id, 'claimed'); save(); return true; },
     async release(id) { await wait(); const l = S.L.find(x => x.id === id); if (!l || l.status === 'booked' || (l.setter_id !== S.session && me().role !== 'admin')) return false; l.setter_id = null; log(id, 'released'); save(); return true; },
+    async reschedule(id, at) { const l = S.L.find(x => x.id === id); Object.assign(l, { call_at: new Date(at).toISOString(), outcome: 'rescheduled' }); log(id, 'rescheduled', { call_at: l.call_at }); save(); },
     async bookManual(id, callAt, closerId) { const l = S.L.find(x => x.id === id); Object.assign(l, { status: 'booked', call_at: new Date(callAt).toISOString(), closer_id: closerId, follow_up_at: null, outcome: null, setter_id: l.setter_id || S.session }); log(id, 'booked', { call_at: l.call_at, closer_id: closerId }); save(); },
     async assign(id, setterId) { const l = S.L.find(x => x.id === id); l.setter_id = setterId || null; log(id, 'assigned', { setter_id: setterId }); save(); },
     async update(id, patch) {
@@ -253,7 +258,7 @@ function demoSales(L) {
   const by = (xs, k, fn) => Object.values(xs.reduce((a, l) => { const id = l[k]; if (!id) return a; fn(a[id] ||= { id }, l); return a; }, {}));
   return {
     sales: { booked: L.filter(l => l.status === 'booked').length, held: L.filter(l => ['closed', 'not_closed'].includes(l.outcome)).length, pending: L.filter(l => l.status === 'booked' && !l.outcome).length,
-      closed: C.length, not_closed: L.filter(l => l.outcome === 'not_closed').length, no_show: L.filter(l => l.outcome === 'no_show').length, rescheduled: L.filter(l => l.outcome === 'rescheduled').length,
+      closed: C.length, not_closed: L.filter(l => l.outcome === 'not_closed').length, no_show: L.filter(l => l.outcome === 'no_show').length, rescheduled: L.filter(l => l.outcome === 'rescheduled').length, disqualified: L.filter(l => l.outcome === 'disqualified').length,
       gross: sum(C, l => l.sale_price), discount: sum(C, l => l.discount), net: sum(C, l => l.sale_price - l.discount) },
     by_package: by(C, 'package_id', (x, l) => { x.n = (x.n || 0) + 1; x.gross = (x.gross || 0) + +l.sale_price; x.discount = (x.discount || 0) + +l.discount; x.net = (x.net || 0) + l.sale_price - l.discount; }),
     closers: by(L.filter(l => l.status === 'booked'), 'closer_id', (x, l) => { x.booked = (x.booked || 0) + 1; if (l.outcome === 'closed') { x.closed = (x.closed || 0) + 1; x.net = (x.net || 0) + l.sale_price - l.discount; } if (l.outcome === 'no_show') x.no_show = (x.no_show || 0) + 1; })

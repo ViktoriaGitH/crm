@@ -334,7 +334,7 @@ create table if not exists public.packages (
 );
 alter table public.leads
   add column if not exists source text,
-  add column if not exists outcome text check (outcome in ('closed','not_closed','no_show','rescheduled')),
+  add column if not exists outcome text check (outcome in ('closed','not_closed','no_show','rescheduled','disqualified')),
   add column if not exists package_id uuid references public.packages(id) on delete set null,
   add column if not exists sale_price numeric(12,2) check (sale_price >= 0),
   add column if not exists discount numeric(12,2) not null default 0 check (discount >= 0),
@@ -362,3 +362,20 @@ begin
 end $$;
 revoke execute on function public.book_manual(uuid, timestamptz, uuid) from public, anon;
 grant execute on function public.book_manual(uuid, timestamptz, uuid) to authenticated;
+
+-- пренасрочване на среща с нова дата и час (клоузърът на срещата, сетърът или админ)
+create or replace function public.reschedule_call(p_lead uuid, p_call_at timestamptz)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare ok boolean;
+begin
+  if p_call_at is null or p_call_at < now() - interval '1 hour' or p_call_at > now() + interval '1 year' then raise exception 'invalid time'; end if;
+  perform set_config('crm.trusted', 'on', true);
+  update public.leads set call_at = p_call_at, outcome = 'rescheduled'
+   where id = p_lead and status = 'booked' and (public.is_admin() or closer_id = auth.uid() or setter_id = auth.uid());
+  ok := found;
+  perform set_config('crm.trusted', 'off', true);
+  if ok then insert into public.lead_events (lead_id, user_id, type, data) values (p_lead, auth.uid(), 'rescheduled', jsonb_build_object('call_at', p_call_at)); end if;
+  return ok;
+end $$;
+revoke execute on function public.reschedule_call(uuid, timestamptz) from public, anon;
+grant execute on function public.reschedule_call(uuid, timestamptz) to authenticated;

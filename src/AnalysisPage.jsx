@@ -69,7 +69,7 @@ function Funnel({ st, imports }) {
               <b className="f-n">{n}</b><span className="f-r">{r ? `${r} от предишната` : ''}</span></div>
           ))}
         </div>
-        <span className="faint" style={{ fontSize: 13 }}>Сега: {+b.new || 0} нови · {+b.no_answer || 0} не вдигнали · {+b.wrong_number || 0} грешен номер · {+b.disqualified || 0} неквалифицирани · {+b.follow_up || 0} фолоу ъп · {+s.pending || 0} срещи чакат резултат</span>
+        <span className="faint" style={{ fontSize: 13 }}>Сега: {+b.new || 0} нови · {+b.no_answer || 0} не вдигнали · {+b.wrong_number || 0} грешен номер · {+b.disqualified || 0} неквалифицирани · {+b.follow_up || 0} фолоу ъп · {+s.pending || 0} срещи чакат резултат{+s.disqualified ? ` · ${s.disqualified} неквалифицирани на среща` : ''}</span>
       </div>
       <div className="card">
         <div className="box"><p className="sec-t" style={{ margin: 0 }}>По уебинар / източник</p></div>

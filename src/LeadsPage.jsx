@@ -145,7 +145,7 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
                   {rows === null ? <div className="loading-row" /> : list.length === 0 ? <div className="col-empty">—</div> : list.map(r => {
                     const person = byId[r.setter_id];
                     const wait = !r.setter_id && r.status === 'new' ? waited(r.lead_created_at || r.created_at) : null;
-                    const when = st === 'follow_up' ? r.follow_up_at : (st === 'booked' || st === 'upcoming' || st === 'await') ? r.call_at : null;
+                    const when = st === 'follow_up' ? r.follow_up_at : (st === 'booked' || st === 'upcoming' || st === 'await' || st === 'rescheduled' || r.outcome === 'rescheduled') ? r.call_at : null;
                     const src = r.source || impById[r.import_id]?.name;
                     return (
                       <a key={r.id} className="kcard" href={`#/${view}/${r.id}`}>
@@ -226,8 +226,8 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
   );
 }
 
-const CLOSER_COLS = ['upcoming', 'await', 'closed', 'not_closed', 'no_show', 'rescheduled'];
-const STAGE = { upcoming: 'Предстоящи', await: 'Чака резултат', closed: 'Затворени', not_closed: 'Не затворени', no_show: 'Не се яви', rescheduled: 'Пренасрочени' };
+const CLOSER_COLS = ['upcoming', 'await', 'closed', 'not_closed', 'no_show', 'disqualified', 'rescheduled'];
+const STAGE = { upcoming: 'Предстоящи', await: 'Чака резултат', closed: 'Затворени', not_closed: 'Не затворени', no_show: 'Не се яви', disqualified: 'Неквалиф.', rescheduled: 'Пренасрочени' };
 const closerStage = r => r.outcome || (r.call_at && new Date(r.call_at) > new Date() ? 'upcoming' : 'await');
 
 function NewLead({ onClose, onDone }) {
@@ -259,7 +259,7 @@ function NewLead({ onClose, onDone }) {
 
 const BOARD = ['new', 'answered', 'no_answer', 'wrong_number', 'disqualified', 'follow_up', 'booked', 'closed', 'not_closed'];
 // записаните се разпределят според резултата от срещата
-const setterCol = r => r.status !== 'booked' ? r.status : r.outcome === 'closed' ? 'closed' : (r.outcome === 'not_closed' || r.outcome === 'no_show') ? 'not_closed' : 'booked';
+const setterCol = r => r.status !== 'booked' ? r.status : r.outcome === 'disqualified' ? 'disqualified' : r.outcome === 'closed' ? 'closed' : (r.outcome === 'not_closed' || r.outcome === 'no_show') ? 'not_closed' : 'booked';
 const COL_LABEL = { booked: 'Записан', closed: 'Затворена', not_closed: 'Не затворена', disqualified: 'Неквалиф.' };
 const initials2 = n => String(n || '').split(/\s+/).map(w => (w.match(/\p{L}/u) || [''])[0]).join('').slice(0, 2).toUpperCase();
 function waited(t) {

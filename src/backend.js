@@ -63,6 +63,7 @@ function supabaseBackend() {
     },
     async stats() { return check(await sb.rpc('crm_stats')); },
     lead: async (id) => check(await sb.from('leads').select('*').eq('id', id).maybeSingle()),
+    dayEvents: async (from, to) => check(await sb.from('lead_events').select('lead_id,user_id,type,data,created_at').gte('created_at', from).lt('created_at', to).neq('type', 'note').order('created_at').limit(5000)),
     events: async (id) => check(await sb.from('lead_events').select('*').eq('lead_id', id).order('created_at', { ascending: false }).limit(50)),
     async claim(id) { return check(await sb.rpc('claim_lead', { p_lead: id })); },
     async release(id) { return check(await sb.rpc('release_lead', { p_lead: id })); },
@@ -190,6 +191,7 @@ function demoBackend() {
       return { total: L.length, free: L.filter(l => !l.setter_id).length, by_status: grp(L, l => l.status), mine_by_status: grp(L.filter(l => l.setter_id === p.id), l => l.status), setters: agg(L, 'setter_id'), imports: agg(L, 'import_id'), ...demoSales(L) };
     },
     async lead(id) { await wait(30); const l = S.L.find(x => x.id === id); return l && visible(l, me()) ? { ...l } : null; },
+    async dayEvents(from, to) { await wait(30); return S.E.filter(e => e.type !== 'note' && e.created_at >= from && e.created_at < to); },
     async events(id) { await wait(30); return S.E.filter(e => e.lead_id === id).slice().reverse(); },
     async claim(id) { await wait(); const l = S.L.find(x => x.id === id); if (!l || l.setter_id) return false; l.setter_id = S.session; l.claimed_at = now(); log(id, 'claimed'); save(); return true; },
     async release(id) { await wait(); const l = S.L.find(x => x.id === id); if (!l || l.status === 'booked' || (l.setter_id !== S.session && me().role !== 'admin')) return false; l.setter_id = null; log(id, 'released'); save(); return true; },

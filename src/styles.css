@@ -411,3 +411,6 @@ textarea.input { resize: vertical; line-height: 1.5; }
 .board .col-head .cnt { border: none; padding: 0; min-width: 0; font-size: 11px; }
 .out-disqualified { --st: var(--danger); } .status-btn.out-disqualified { color: var(--danger); }
 .col.st-disqualified .col-head b { color: var(--danger); }
+
+.day-pick { display: flex; align-items: center; gap: 4px; } .day-pick .input { width: auto; color-scheme: dark; } [data-theme="light"] .day-pick .input { color-scheme: light; }
+.day-sum { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }

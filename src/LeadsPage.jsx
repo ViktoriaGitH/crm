@@ -18,6 +18,15 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
   const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('crm-tab-' + view) || defaultTab; } catch { return defaultTab; } });
   const [status, setStatus] = useState('');
   const [importId, setImportId] = useState('');
+  const [day, setDay] = useState('');
+  const [dayEv, setDayEv] = useState(null);
+  useEffect(() => {
+    if (!day) { setDayEv(null); return; }
+    let live = true; setDayEv(null);
+    const from = new Date(day + 'T00:00:00'), to = new Date(from); to.setDate(to.getDate() + 1);
+    db.dayEvents(from.toISOString(), to.toISOString()).then(e => { if (live) setDayEv(e); }).catch(e => toast(e.message, true));
+    return () => { live = false; };
+  }, [day]); // eslint-disable-line react-hooks/exhaustive-deps
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   const [rows, setRows] = useState(null);
@@ -89,6 +98,8 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
   const tabs = view !== 'leads' ? null : isAdmin
     ? [['all', 'Всички'], ['free', 'Свободни'], ['mine', 'Моите'], ['taken', 'Взети']]
     : [['free', 'Свободни'], ['mine', 'Моите']];
+  const dayIds = useMemo(() => dayEv && new Set(dayEv.map(e => e.lead_id)), [dayEv]);
+  const boardRows = rows && day ? (dayIds ? rows.filter(r => dayIds.has(r.id)) : null) : rows;
   let shown = rows || [];
 
   const whenCol = view === 'followups' ? 'follow_up_at' : view === 'calls' ? 'call_at' : null;
@@ -124,6 +135,12 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
             {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         )}
+        {board && (
+          <div className="day-pick">
+            <input className="input" type="date" value={day} max={new Date().toLocaleDateString('sv-SE')} onChange={e => setDay(e.target.value)} aria-label="Ден" title="Покажи какво е станало на тази дата" />
+            {day && <button className="icon-btn" onClick={() => setDay('')} aria-label="Всички дни"><Icon name="x" size={15} /></button>}
+          </div>
+        )}
         {imports.length > 0 && (
           <select className="input" value={importId} onChange={e => setImportId(e.target.value)} aria-label="Уебинар">
             <option value="">Всички уебинари</option>
@@ -134,15 +151,16 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
 
       {error && <div className="err" style={{ marginBottom: 12 }}>{error}</div>}
 
+      {board && day && <DaySummary ev={dayEv} byId={byId} day={day} />}
       {board && (
         <div className="board">
           {(view === 'calls' ? CLOSER_COLS : BOARD).map(st => {
-            const list = (rows || []).filter(view === 'calls' ? r => closerStage(r) === st : r => setterCol(r) === st);
+            const list = (boardRows || []).filter(view === 'calls' ? r => closerStage(r) === st : r => setterCol(r) === st);
             return (
               <div key={st} className={`col st-${st}`}>
-                <div className="col-head"><span className="dot" /><b title={view === 'calls' ? STAGE[st] : STATUS[st] || COL_LABEL[st]}>{view === 'calls' ? STAGE[st] : COL_LABEL[st] || STATUS[st]}</b><span className="cnt">{rows ? list.length : '…'}</span></div>
+                <div className="col-head"><span className="dot" /><b title={view === 'calls' ? STAGE[st] : STATUS[st] || COL_LABEL[st]}>{view === 'calls' ? STAGE[st] : COL_LABEL[st] || STATUS[st]}</b><span className="cnt">{boardRows ? list.length : '…'}</span></div>
                 <div className="col-body">
-                  {rows === null ? <div className="loading-row" /> : list.length === 0 ? <div className="col-empty">—</div> : list.map(r => {
+                  {boardRows === null ? <div className="loading-row" /> : list.length === 0 ? <div className="col-empty">—</div> : list.map(r => {
                     const person = byId[r.setter_id];
                     const wait = !r.setter_id && r.status === 'new' ? waited(r.lead_created_at || r.created_at) : null;
                     const when = st === 'follow_up' ? r.follow_up_at : (st === 'booked' || st === 'upcoming' || st === 'await' || st === 'rescheduled' || r.outcome === 'rescheduled') ? r.call_at : null;
@@ -223,6 +241,40 @@ export default function LeadsPage({ me, view, openId, onChanged }) {
       </div>
       </>}
     </>
+  );
+}
+
+function DaySummary({ ev, byId, day }) {
+  if (!ev) return <div className="card box day-sum"><div className="loading-row" /></div>;
+  const people = {};
+  const P = id => (people[id] ||= { taken: new Set(), worked: new Set(), booked: new Set(), outcomes: new Set() });
+  const last = {};
+  for (const e of ev) {
+    if (!e.user_id) continue;
+    if (e.type === 'claimed') P(e.user_id).taken.add(e.lead_id);
+    if (e.type === 'status') { P(e.user_id).worked.add(e.lead_id); last[e.lead_id] = e.data?.to; }
+    if (e.type === 'booked' || (e.type === 'status' && e.data?.to === 'booked')) P(e.user_id).booked.add(e.lead_id);
+    if (e.type === 'outcome' || e.type === 'rescheduled') P(e.user_id).outcomes.add(e.lead_id);
+  }
+  const by = {}; Object.values(last).forEach(s => { if (s) by[s] = (by[s] || 0) + 1; });
+  const sum = k => new Set(Object.values(people).flatMap(p => [...p[k]])).size;
+  const label = new Intl.DateTimeFormat('bg-BG', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(day + 'T12:00:00'));
+  return (
+    <div className="card box day-sum">
+      <div className="row" style={{ alignItems: 'baseline' }}><b className="grow" style={{ fontSize: 16 }}>{label}</b><span className="faint" style={{ fontSize: 13 }}>Таблото показва само лийдовете с действие в този ден</span></div>
+      {ev.length === 0 ? <span className="muted">Няма действия в този ден.</span> : <>
+        <div className="stats">
+          <div className="stat"><b>{sum('taken')}</b><span>взети</span></div>
+          <div className="stat"><b>{sum('worked')}</b><span>обработени</span></div>
+          <div className="stat"><b>{sum('booked')}</b><span>записани срещи</span></div>
+          <div className="stat"><b>{sum('outcomes')}</b><span>резултати от срещи</span></div>
+        </div>
+        {Object.keys(by).length > 0 && <div className="row" style={{ gap: 6 }}>{Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, n]) => <span key={k} className={`badge st-${k}`}>{STATUS[k] || k} · {n}</span>)}</div>}
+        <table className="table compact"><thead><tr><th>Кой</th><th>Взе</th><th>Обработи</th><th>Записа</th><th>Резултати</th></tr></thead><tbody>
+          {Object.entries(people).map(([id, p]) => <tr key={id}><td>{byId[id]?.full_name || '—'}</td><td>{p.taken.size}</td><td>{p.worked.size}</td><td>{p.booked.size}</td><td>{p.outcomes.size}</td></tr>)}
+        </tbody></table>
+      </>}
+    </div>
   );
 }
 
